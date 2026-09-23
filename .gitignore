@@ -1,0 +1,32 @@
+# Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Build
+.gradle/
+build/
+*/build/
+
+# Local configuration
+local.properties
+
+# Generated files
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android Studio caches
+.idea/caches/
+.idea/workspace.xml
+.idea/misc.xml
+.idea/deploymentTargetDropDown.xml
+.idea/other.xml

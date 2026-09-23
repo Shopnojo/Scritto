@@ -1,0 +1,401 @@
+package com.internship.scritto.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.internship.scritto.data.repository.ScrittoStore
+import com.internship.scritto.ui.theme.ScrittoAmber
+import com.internship.scritto.ui.theme.ScrittoBackground
+import com.internship.scritto.ui.theme.ScrittoBorder
+import com.internship.scritto.ui.theme.ScrittoBorderSubtle
+import com.internship.scritto.ui.theme.ScrittoCream
+import com.internship.scritto.ui.theme.ScrittoCreamBright
+import com.internship.scritto.ui.theme.ScrittoSurface
+import com.internship.scritto.ui.theme.ScrittoSurfaceElevated
+import com.internship.scritto.ui.theme.ScrittoTextMuted
+import com.internship.scritto.ui.theme.ScrittoTextSecondary
+
+@Composable
+fun HomeScreen(
+    onNoteSelected: (String) -> Unit = {}
+) {
+    val latestNote = ScrittoStore.notes.firstOrNull()
+
+    var commandText by remember {
+        mutableStateOf("")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = 54.dp,
+                bottom = 112.dp
+            )
+    ) {
+
+        // ================================================================
+        // GREETING
+        // ================================================================
+
+        Text(
+            text = "Good evening",
+            color = ScrittoCreamBright,
+            fontSize = 34.sp,
+            lineHeight = 40.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
+        Text(
+            text = "What are we working on?",
+            color = ScrittoTextSecondary,
+            fontSize = 17.sp,
+            lineHeight = 24.sp
+        )
+
+        Spacer(
+            modifier = Modifier.height(28.dp)
+        )
+
+        // ================================================================
+        // COMMAND BAR
+        // ================================================================
+
+        HomeCommandBar(
+            value = commandText,
+            onValueChange = { newValue ->
+                commandText = newValue
+            }
+        )
+
+        Spacer(
+            modifier = Modifier.height(26.dp)
+        )
+
+        // ================================================================
+        // QUICK ACTIONS
+        // ================================================================
+
+        Text(
+            text = "Quick actions",
+            color = ScrittoCream,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(
+            modifier = Modifier.height(12.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+
+            HomeQuickAction(
+                modifier = Modifier.weight(1f),
+                title = "Note",
+                icon = "✦"
+            )
+
+            HomeQuickAction(
+                modifier = Modifier.weight(1f),
+                title = "Task",
+                icon = "✓"
+            )
+
+            HomeQuickAction(
+                modifier = Modifier.weight(1f),
+                title = "Event",
+                icon = "◷"
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(32.dp)
+        )
+
+        // ================================================================
+        // RECENT
+        // ================================================================
+
+        Text(
+            text = "Recent",
+            color = ScrittoCream,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        if (latestNote == null) {
+
+            EmptyRecentState()
+
+        } else {
+
+            RecentNoteCard(
+                title = latestNote.title.ifBlank {
+                    "Untitled note"
+                },
+                preview = latestNote.content.ifBlank {
+                    "No content"
+                },
+                onClick = {
+                    onNoteSelected(latestNote.id)
+                }
+            )
+        }
+    }
+}
+
+// ========================================================================
+// COMMAND BAR
+// ========================================================================
+
+@Composable
+private fun HomeCommandBar(
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .clip(
+                RoundedCornerShape(18.dp)
+            )
+            .background(
+                ScrittoSurface
+            )
+            .border(
+                width = 1.dp,
+                color = ScrittoBorder,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .padding(
+                horizontal = 18.dp
+            ),
+        contentAlignment = Alignment.CenterStart
+    ) {
+
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            textStyle = TextStyle(
+                color = ScrittoCream,
+                fontSize = 16.sp
+            ),
+            cursorBrush = SolidColor(ScrittoAmber),
+            decorationBox = { innerTextField ->
+
+                if (value.isEmpty()) {
+                    Text(
+                        text = "Ask or command...",
+                        color = ScrittoTextMuted,
+                        fontSize = 16.sp
+                    )
+                }
+
+                innerTextField()
+            }
+        )
+    }
+}
+
+// ========================================================================
+// QUICK ACTION
+// ========================================================================
+
+@Composable
+private fun HomeQuickAction(
+    modifier: Modifier = Modifier,
+    title: String,
+    icon: String
+) {
+    Column(
+        modifier = modifier
+            .height(86.dp)
+            .clip(
+                RoundedCornerShape(18.dp)
+            )
+            .background(
+                ScrittoSurface
+            )
+            .border(
+                width = 1.dp,
+                color = ScrittoBorderSubtle,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .clickable { },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+
+        Text(
+            text = icon,
+            color = ScrittoAmber,
+            fontSize = 21.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(
+            modifier = Modifier.height(7.dp)
+        )
+
+        Text(
+            text = title,
+            color = ScrittoCream,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// ========================================================================
+// EMPTY RECENT STATE
+// ========================================================================
+
+@Composable
+private fun EmptyRecentState() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(
+                RoundedCornerShape(18.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = ScrittoBorderSubtle,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .background(
+                ScrittoSurface.copy(alpha = 0.45f)
+            )
+            .padding(
+                horizontal = 20.dp,
+                vertical = 24.dp
+            )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            Text(
+                text = "Nothing here yet",
+                color = ScrittoTextSecondary,
+                fontSize = 15.sp
+            )
+
+            Spacer(
+                modifier = Modifier.height(5.dp)
+            )
+
+            Text(
+                text = "Create something from the + button.",
+                color = ScrittoTextMuted,
+                fontSize = 14.sp
+            )
+        }
+    }
+}
+
+// ========================================================================
+// RECENT NOTE
+// ========================================================================
+
+@Composable
+private fun RecentNoteCard(
+    title: String,
+    preview: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(
+                RoundedCornerShape(18.dp)
+            )
+            .background(
+                ScrittoSurfaceElevated
+            )
+            .border(
+                width = 1.dp,
+                color = ScrittoBorderSubtle,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .clickable(
+                onClick = onClick
+            )
+            .padding(
+                horizontal = 18.dp,
+                vertical = 18.dp
+            )
+    ) {
+
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            Text(
+                text = title,
+                color = ScrittoCreamBright,
+                fontSize = 17.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+
+            Spacer(
+                modifier = Modifier.height(7.dp)
+            )
+
+            Text(
+                text = preview,
+                color = ScrittoTextSecondary,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                maxLines = 2
+            )
+        }
+    }
+}
