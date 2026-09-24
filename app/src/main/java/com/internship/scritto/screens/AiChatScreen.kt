@@ -410,7 +410,7 @@ private fun AiComposer(
                 .graphicsLayer {
                     scaleX = sendScale
                     scaleY = sendScale
-                    translationY = 40.dp.toPx()
+                    translationY = 20.dp.toPx()
                 }
                 .clip(CircleShape)
                 .background(
@@ -469,7 +469,7 @@ private fun AiNavigationIsland(
     onSchedule: () -> Unit
 ) {
     val view = LocalView.current
-    val width = if (expanded) 266.dp else 52.dp
+    val width = if (expanded) 226.dp else 58.dp
 
     Box(
         modifier = Modifier
@@ -479,7 +479,7 @@ private fun AiNavigationIsland(
     ) {
         Row(
             modifier = Modifier
-                .height(52.dp)
+                .height(58.dp)
                 .width(width)
                 .clip(RoundedCornerShape(28.dp))
                 .background(ScrittoSurface.copy(alpha = 0.90f))
@@ -491,7 +491,7 @@ private fun AiNavigationIsland(
                 .clickable {
                     onExpandedChange()
                 }
-                .padding(horizontal = if (expanded) 8.dp else 0.dp),
+                .padding(horizontal = 0.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -508,7 +508,7 @@ private fun AiNavigationIsland(
 
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(ScrittoCreamBright)
                         .clickable {
@@ -521,7 +521,7 @@ private fun AiNavigationIsland(
                         imageVector = Icons.Outlined.Add,
                         contentDescription = "Create note",
                         tint = MaterialTheme.colorScheme.background,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(23.dp)
                     )
                 }
 
@@ -529,7 +529,7 @@ private fun AiNavigationIsland(
 
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(42.dp)
                         .clip(CircleShape)
                         .background(ScrittoAmber.copy(alpha = 0.18f))
                         .border(1.dp, ScrittoAmber.copy(alpha = 0.42f), CircleShape)
