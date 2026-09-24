@@ -21,6 +21,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -141,20 +144,20 @@ fun HomeScreen(
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
                 title = "Note",
-                icon = "✦",
+                icon = Icons.Outlined.Description,
                 onClick = onNewNote
             )
 
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
                 title = "Task",
-                icon = "✓"
+                icon = Icons.Outlined.CheckCircle
             )
 
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
                 title = "Event",
-                icon = "◷"
+                icon = Icons.Outlined.Event
             )
         }
 
@@ -305,7 +308,7 @@ private fun HomeCommandBar(
 private fun HomeQuickAction(
     modifier: Modifier = Modifier,
     title: String,
-    icon: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit = {}
 ) {
     Column(
@@ -327,11 +330,11 @@ private fun HomeQuickAction(
         verticalArrangement = Arrangement.Center
     ) {
 
-        Text(
-            text = icon,
-            color = ScrittoAmber,
-            fontSize = 21.sp,
-            fontWeight = FontWeight.SemiBold
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = ScrittoAmber,
+            modifier = Modifier.size(21.dp)
         )
 
         Spacer(
