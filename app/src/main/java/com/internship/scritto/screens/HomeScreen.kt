@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -160,6 +161,13 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f),
                 title = "Event",
                 icon = Icons.Outlined.Event
+            )
+
+            HomeQuickAction(
+                modifier = Modifier.weight(1f),
+                title = "Schedule",
+                icon = Icons.Outlined.CalendarMonth,
+                onClick = onSchedule
             )
 
             HomeQuickAction(
