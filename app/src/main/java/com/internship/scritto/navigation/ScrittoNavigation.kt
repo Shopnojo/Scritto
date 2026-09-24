@@ -40,9 +40,11 @@ import com.internship.scritto.data.repository.ScrittoStore
 import com.internship.scritto.screens.HomeScreen
 import com.internship.scritto.screens.NoteEditorScreen
 import com.internship.scritto.screens.NotesScreen
+import com.internship.scritto.screens.ScheduleScreen
 
 private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
+private const val SCHEDULE_ROUTE = "schedule"
 private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
 
 private data class CreateAction(
@@ -108,6 +110,10 @@ fun ScrittoNavigation() {
                         navController.navigate("note/$noteId")
                     }
                 )
+            }
+
+            composable(SCHEDULE_ROUTE) {
+                ScheduleScreen()
             }
 
             composable(
@@ -287,6 +293,13 @@ fun ScrittoNavigation() {
                             3 -> {
                                 createMenuExpanded = false
                                 // Files will be added next.
+                            }
+
+                            4 -> {
+                                createMenuExpanded = false
+                                navController.navigate(SCHEDULE_ROUTE) {
+                                    launchSingleTop = true
+                                }
                             }
                         }
                     },
