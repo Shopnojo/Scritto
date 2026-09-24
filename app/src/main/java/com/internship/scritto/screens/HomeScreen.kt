@@ -54,7 +54,9 @@ fun HomeScreen(
     onNewNote: () -> Unit = {}
 ) {
     val pinnedNote = ScrittoStore.notes.firstOrNull { it.isPinned }
-    val recentNote = ScrittoStore.notes.firstOrNull { !it.isPinned }
+    val recentNotes = ScrittoStore.notes
+        .filter { !it.isPinned }
+        .take(3)
     val dashboardScrollState = rememberScrollState()
 
     var commandText by remember {
@@ -208,7 +210,7 @@ fun HomeScreen(
             modifier = Modifier.height(14.dp)
         )
 
-        if (recentNote == null) {
+        if (recentNotes.isEmpty()) {
             if (pinnedNote == null) {
                 EmptyRecentState()
             } else {
@@ -218,17 +220,23 @@ fun HomeScreen(
                 )
             }
         } else {
-            RecentNoteCard(
-                title = recentNote.title.ifBlank {
-                    "Untitled note"
-                },
-                preview = recentNote.content.ifBlank {
-                    "No content"
-                },
-                onClick = {
-                    onNoteSelected(recentNote.id)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                recentNotes.forEach { note ->
+                    RecentNoteCard(
+                        title = note.title.ifBlank {
+                            "Untitled note"
+                        },
+                        preview = note.content.ifBlank {
+                            "No content"
+                        },
+                        onClick = {
+                            onNoteSelected(note.id)
+                        }
+                    )
                 }
-            )
+            }
         }
     }
 }
