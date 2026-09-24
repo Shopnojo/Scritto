@@ -559,7 +559,7 @@ private fun AiIslandItem(
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(42.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
