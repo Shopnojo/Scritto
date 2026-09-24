@@ -13,10 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +52,9 @@ import com.internship.scritto.ui.theme.ScrittoTextSecondary
 fun HomeScreen(
     onNoteSelected: (String) -> Unit = {}
 ) {
-    val latestNote = ScrittoStore.notes.firstOrNull()
+    val pinnedNote = ScrittoStore.notes.firstOrNull { it.isPinned }
+    val recentNote = ScrittoStore.notes.firstOrNull { !it.isPinned }
+    val dashboardScrollState = rememberScrollState()
 
     var commandText by remember {
         mutableStateOf("")
@@ -57,6 +64,7 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
+            .verticalScroll(dashboardScrollState)
             .padding(
                 start = 24.dp,
                 end = 24.dp,
@@ -151,6 +159,39 @@ fun HomeScreen(
         )
 
         // ================================================================
+        // PINNED
+        // ================================================================
+
+        if (pinnedNote != null) {
+            Text(
+                text = "Pinned",
+                color = ScrittoCream,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(
+                modifier = Modifier.height(14.dp)
+            )
+
+            PinnedNoteCard(
+                title = pinnedNote.title.ifBlank {
+                    "Untitled note"
+                },
+                preview = pinnedNote.content.ifBlank {
+                    "No content"
+                },
+                onClick = {
+                    onNoteSelected(pinnedNote.id)
+                }
+            )
+
+            Spacer(
+                modifier = Modifier.height(28.dp)
+            )
+        }
+
+        // ================================================================
         // RECENT
         // ================================================================
 
@@ -165,21 +206,25 @@ fun HomeScreen(
             modifier = Modifier.height(14.dp)
         )
 
-        if (latestNote == null) {
-
-            EmptyRecentState()
-
+        if (recentNote == null) {
+            if (pinnedNote == null) {
+                EmptyRecentState()
+            } else {
+                EmptyRecentState(
+                    title = "No other notes yet",
+                    subtitle = "Create another note from the + button."
+                )
+            }
         } else {
-
             RecentNoteCard(
-                title = latestNote.title.ifBlank {
+                title = recentNote.title.ifBlank {
                     "Untitled note"
                 },
-                preview = latestNote.content.ifBlank {
+                preview = recentNote.content.ifBlank {
                     "No content"
                 },
                 onClick = {
-                    onNoteSelected(latestNote.id)
+                    onNoteSelected(recentNote.id)
                 }
             )
         }
@@ -296,7 +341,10 @@ private fun HomeQuickAction(
 // ========================================================================
 
 @Composable
-private fun EmptyRecentState() {
+private fun EmptyRecentState(
+    title: String = "Nothing here yet",
+    subtitle: String = "Create something from the + button."
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -321,7 +369,7 @@ private fun EmptyRecentState() {
         ) {
 
             Text(
-                text = "Nothing here yet",
+                text = title,
                 color = ScrittoTextSecondary,
                 fontSize = 15.sp
             )
@@ -331,9 +379,78 @@ private fun EmptyRecentState() {
             )
 
             Text(
-                text = "Create something from the + button.",
+                text = subtitle,
                 color = ScrittoTextMuted,
                 fontSize = 14.sp
+            )
+        }
+    }
+}
+
+// ========================================================================
+// PINNED NOTE
+// ========================================================================
+
+@Composable
+private fun PinnedNoteCard(
+    title: String,
+    preview: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(
+                RoundedCornerShape(18.dp)
+            )
+            .background(
+                ScrittoSurfaceElevated
+            )
+            .border(
+                width = 1.dp,
+                color = ScrittoAmber.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(18.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = 18.dp,
+                vertical = 18.dp
+            )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PushPin,
+                    contentDescription = "Pinned note",
+                    tint = ScrittoAmber,
+                    modifier = Modifier.size(18.dp)
+                )
+
+                Text(
+                    text = title,
+                    color = ScrittoCreamBright,
+                    fontSize = 17.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(7.dp)
+            )
+
+            Text(
+                text = preview,
+                color = ScrittoTextSecondary,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                maxLines = 3
             )
         }
     }
