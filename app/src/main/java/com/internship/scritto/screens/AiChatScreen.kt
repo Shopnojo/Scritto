@@ -406,11 +406,10 @@ private fun AiComposer(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(40.dp)
+                .size(48.dp)
                 .graphicsLayer {
                     scaleX = sendScale
                     scaleY = sendScale
-                    translationY = 40.dp.toPx()
                 }
                 .clip(CircleShape)
                 .background(
@@ -584,12 +583,28 @@ private class FoldedSheetShape(
         val radius = with(density) { cornerRadius.toPx() }
         val fold = with(density) { 24.dp.toPx() }
         val path = Path().apply {
+            val cutoutStart = size.width - fold * 4.2f
+            val cutoutTop = size.height - fold * 2.1f
+
             moveTo(radius, 0f)
             lineTo(size.width - radius, 0f)
             quadraticTo(size.width, 0f, size.width, radius)
-            lineTo(size.width, size.height - fold - radius)
-            lineTo(size.width - fold, size.height - radius)
-            quadraticTo(size.width - fold, size.height, size.width - fold - radius, size.height)
+            lineTo(size.width, cutoutTop)
+            lineTo(size.width - fold * 1.8f, cutoutTop)
+            cubicTo(
+                size.width - fold * 2.6f,
+                cutoutTop,
+                size.width - fold * 3.0f,
+                cutoutTop + fold * 0.35f,
+                cutoutStart + fold * 0.7f,
+                size.height - fold * 0.45f
+            )
+            quadraticTo(
+                cutoutStart,
+                size.height,
+                cutoutStart - fold * 0.5f,
+                size.height
+            )
             lineTo(radius, size.height)
             quadraticTo(0f, size.height, 0f, size.height - radius)
             lineTo(0f, radius)
