@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import com.internship.scritto.screens.NoteEditorScreen
 import com.internship.scritto.screens.FilesScreen
 import com.internship.scritto.screens.NotesScreen
 import com.internship.scritto.screens.ScheduleScreen
+import com.internship.scritto.ui.splash.ScrittoSplashScreen
 
 private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
@@ -72,6 +74,8 @@ fun ScrittoNavigation() {
 
     val isEditingNote = currentRoute == NOTE_EDITOR_ROUTE
     val density = LocalDensity.current
+
+    var splashVisible by rememberSaveable { mutableStateOf(true) }
 
     var selectedDockIndex by remember {
         mutableStateOf(0)
@@ -357,6 +361,12 @@ fun ScrittoNavigation() {
                     createMenuExpanded = createMenuExpanded
                 )
             }
+        }
+
+        if (splashVisible) {
+            ScrittoSplashScreen(
+                onFinished = { splashVisible = false }
+            )
         }
     }
 }
