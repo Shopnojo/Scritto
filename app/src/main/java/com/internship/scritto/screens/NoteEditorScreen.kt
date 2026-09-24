@@ -326,14 +326,31 @@ fun NoteEditorScreen(
             BasicTextField(
                 value = content,
                 onValueChange = {
-                    content = it
+                    // BasicTextField can emit a plain TextFieldValue when the
+                    // editor regains/loses focus around a toolbar tap. If the
+                    // text itself has not changed, never let that plain value
+                    // erase the AnnotatedString spans we just applied.
+                    val updatedValue = if (
+                        it.text == content.text &&
+                        it.annotatedString.spanStyles.isEmpty() &&
+                        content.annotatedString.spanStyles.isNotEmpty()
+                    ) {
+                        content.copy(
+                            selection = it.selection,
+                            composition = it.composition
+                        )
+                    } else {
+                        it
+                    }
+
+                    content = updatedValue
 
                     // Selection changes are delivered through TextFieldValue.
                     // Remember non-collapsed selections for toolbar actions.
-                    if (!it.selection.collapsed) {
-                        savedSelection = it.selection
+                    if (!updatedValue.selection.collapsed) {
+                        savedSelection = updatedValue.selection
                     } else if (isFocused) {
-                        savedSelection = it.selection
+                        savedSelection = updatedValue.selection
                     }
                 },
                 modifier = Modifier
