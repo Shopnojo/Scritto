@@ -176,7 +176,7 @@ fun ScrittoNavigation() {
             }
         }
 
-        if (!isEditingNote) {
+        if (!isEditingNote && currentRoute != AI_ROUTE) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
