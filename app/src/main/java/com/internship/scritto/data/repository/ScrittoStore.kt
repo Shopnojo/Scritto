@@ -82,10 +82,23 @@ object ScrittoStore {
         val index = _notes.indexOfFirst { it.id == id }
         if (index == -1) return
 
-        _notes[index] = _notes[index].copy(
-            isPinned = pinned,
-            updatedAt = System.currentTimeMillis()
-        )
+        if (pinned) {
+            _notes.replaceAll { note ->
+                if (note.id == id) {
+                    note.copy(
+                        isPinned = true,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                } else {
+                    note.copy(isPinned = false)
+                }
+            }
+        } else {
+            _notes[index] = _notes[index].copy(
+                isPinned = false,
+                updatedAt = System.currentTimeMillis()
+            )
+        }
 
         persist()
     }
