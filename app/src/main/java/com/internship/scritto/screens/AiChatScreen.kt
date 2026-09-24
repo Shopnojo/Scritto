@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -136,7 +137,8 @@ fun AiChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .imePadding()
-            .padding(start = 18.dp, end = 18.dp, top = 54.dp, bottom = 10.dp)
+            .navigationBarsPadding()
+            .padding(start = 18.dp, end = 18.dp, top = 54.dp, bottom = 12.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -234,7 +236,7 @@ fun AiChatScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         AiNavigationIsland(
             expanded = islandExpanded,
@@ -280,151 +282,157 @@ private fun AiComposer(
         modifier = Modifier
             .fillMaxWidth()
             .height(composerHeight)
-            .clip(FoldedSheetShape(26.dp))
-            .background(ScrittoSurface.copy(alpha = 0.97f))
-            .border(1.dp, accent.copy(alpha = borderAlpha), FoldedSheetShape(26.dp))
-            .drawBehind {
-                if (focused || hasText) {
-                    drawLine(
-                        color = ScrittoAmber.copy(alpha = 0.16f),
-                        start = androidx.compose.ui.geometry.Offset(
-                            x = 22.dp.toPx(),
-                            y = size.height - 2.dp.toPx()
-                        ),
-                        end = androidx.compose.ui.geometry.Offset(
-                            x = size.width - 52.dp.toPx(),
-                            y = size.height - 2.dp.toPx()
-                        ),
-                        strokeWidth = 2.dp.toPx()
-                    )
-                }
-            }
-            .padding(start = 17.dp, end = 10.dp, top = 12.dp, bottom = 10.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.Top
-            ) {
-                BasicTextField(
-                    value = input,
-                    onValueChange = onInputChange,
-                    modifier = Modifier
-                        .weight(1f)
-                        .onFocusChanged {
-                            onFocusedChange(it.isFocused)
-                        },
-                    maxLines = 4,
-                    textStyle = TextStyle(
-                        color = ScrittoCream,
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp
-                    ),
-                    cursorBrush = SolidColor(ScrittoAmberBright),
-                    decorationBox = { inner ->
-                        Box {
-                            if (input.isBlank()) {
-                                AnimatedContent(
-                                    targetState = placeholder,
-                                    transitionSpec = {
-                                        fadeIn(tween(260)) togetherWith
-                                            fadeOut(tween(180))
-                                    },
-                                    label = "aiPlaceholder"
-                                ) { currentPlaceholder ->
-                                    Text(
-                                        text = currentPlaceholder,
-                                        color = ScrittoTextMuted,
-                                        fontSize = 15.sp
-                                    )
-                                }
-                            }
-                            inner()
-                        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(composerHeight)
+                .clip(FoldedSheetShape(26.dp))
+                .background(ScrittoSurface.copy(alpha = 0.97f))
+                .border(1.dp, accent.copy(alpha = borderAlpha), FoldedSheetShape(26.dp))
+                .drawBehind {
+                    if (focused || hasText) {
+                        drawLine(
+                            color = ScrittoAmber.copy(alpha = 0.16f),
+                            start = androidx.compose.ui.geometry.Offset(
+                                x = 22.dp.toPx(),
+                                y = size.height - 2.dp.toPx()
+                            ),
+                            end = androidx.compose.ui.geometry.Offset(
+                                x = size.width - 22.dp.toPx(),
+                                y = size.height - 2.dp.toPx()
+                            ),
+                            strokeWidth = 2.dp.toPx()
+                        )
                     }
-                )
-            }
-
-            AnimatedVisibility(
-                visible = focused || hasText,
-                enter = fadeIn(tween(180)) + scaleIn(
-                    initialScale = 0.94f,
-                    animationSpec = tween(180)
-                ),
-                exit = fadeOut(tween(140)) + scaleOut(
-                    targetScale = 0.94f,
-                    animationSpec = tween(140)
-                )
+                }
+                .padding(start = 17.dp, end = 10.dp, top = 12.dp, bottom = 10.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    ComposerAction(
-                        icon = Icons.Outlined.Add,
-                        label = "Attach",
-                        onClick = {}
-                    )
-                    ComposerAction(
-                        icon = Icons.Outlined.AlternateEmail,
-                        label = "Reference",
-                        onClick = {
-                            onInputChange(
-                                if (input.isBlank()) "@ " else "$input@ "
-                            )
-                        }
-                    )
-                    ComposerAction(
-                        icon = Icons.Outlined.AutoAwesome,
-                        label = "AI action",
-                        onClick = {
-                            onInputChange(
-                                if (input.isBlank()) "Help me " else "$input "
-                            )
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    val sendScale by animateFloatAsState(
-                        targetValue = if (hasText) 1f else 0.88f,
-                        animationSpec = tween(180),
-                        label = "sendScale"
-                    )
-
-                    Box(
+                    BasicTextField(
+                        value = input,
+                        onValueChange = onInputChange,
                         modifier = Modifier
-                            .size(40.dp)
-                            .graphicsLayer {
-                                scaleX = sendScale
-                                scaleY = sendScale
-                            }
-                            .clip(CircleShape)
-                            .background(
-                                if (hasText) {
-                                    ScrittoAmber
-                                } else {
-                                    ScrittoBorder.copy(alpha = 0.55f)
-                                }
-                            )
-                            .clickable(enabled = hasText, onClick = onSend),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ArrowUpward,
-                            contentDescription = "Send",
-                            tint = if (hasText) {
-                                MaterialTheme.colorScheme.background
-                            } else {
-                                ScrittoTextMuted
+                            .weight(1f)
+                            .onFocusChanged {
+                                onFocusedChange(it.isFocused)
                             },
-                            modifier = Modifier.size(20.dp)
+                        maxLines = 4,
+                        textStyle = TextStyle(
+                            color = ScrittoCream,
+                            fontSize = 15.sp,
+                            lineHeight = 21.sp
+                        ),
+                        cursorBrush = SolidColor(ScrittoAmberBright),
+                        decorationBox = { inner ->
+                            Box {
+                                if (input.isBlank()) {
+                                    AnimatedContent(
+                                        targetState = placeholder,
+                                        transitionSpec = {
+                                            fadeIn(tween(260)) togetherWith
+                                                fadeOut(tween(180))
+                                        },
+                                        label = "aiPlaceholder"
+                                    ) { currentPlaceholder ->
+                                        Text(
+                                            text = currentPlaceholder,
+                                            color = ScrittoTextMuted,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+                                }
+                                inner()
+                            }
+                        }
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = focused || hasText,
+                    enter = fadeIn(tween(180)) + scaleIn(
+                        initialScale = 0.94f,
+                        animationSpec = tween(180)
+                    ),
+                    exit = fadeOut(tween(140)) + scaleOut(
+                        targetScale = 0.94f,
+                        animationSpec = tween(140)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ComposerAction(
+                            icon = Icons.Outlined.Add,
+                            label = "Attach",
+                            onClick = {}
+                        )
+                        ComposerAction(
+                            icon = Icons.Outlined.AlternateEmail,
+                            label = "Reference",
+                            onClick = {
+                                onInputChange(
+                                    if (input.isBlank()) "@ " else "$input@ "
+                                )
+                            }
+                        )
+                        ComposerAction(
+                            icon = Icons.Outlined.AutoAwesome,
+                            label = "AI action",
+                            onClick = {
+                                onInputChange(
+                                    if (input.isBlank()) "Help me " else "$input "
+                                )
+                            }
                         )
                     }
                 }
             }
+        }
+
+        val sendScale by animateFloatAsState(
+            targetValue = if (hasText) 1f else 0.88f,
+            animationSpec = tween(180),
+            label = "sendScale"
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(40.dp)
+                .graphicsLayer {
+                    scaleX = sendScale
+                    scaleY = sendScale
+                    translationY = 18.dp.toPx()
+                }
+                .clip(CircleShape)
+                .background(
+                    if (hasText) {
+                        ScrittoAmber
+                    } else {
+                        ScrittoBorder.copy(alpha = 0.55f)
+                    }
+                )
+                .clickable(enabled = hasText, onClick = onSend),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.ArrowUpward,
+                contentDescription = "Send",
+                tint = if (hasText) {
+                    MaterialTheme.colorScheme.background
+                } else {
+                    ScrittoTextMuted
+                },
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
