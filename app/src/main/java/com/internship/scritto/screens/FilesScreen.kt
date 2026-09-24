@@ -1,5 +1,6 @@
 package com.internship.scritto.screens
 
+import android.content.Intent
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,8 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,18 +39,24 @@ import com.internship.scritto.ui.theme.ScrittoCream
 import com.internship.scritto.ui.theme.ScrittoCreamBright
 import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
+import com.internship.scritto.data.repository.ScrittoStore
 
 @Composable
 fun FilesScreen() {
     val context = LocalContext.current
-    val importedFiles = remember {
-        mutableStateListOf<Pair<String, String>>()
-    }
+    val importedFiles = ScrittoStore.importedFiles
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
             val fileName = context.contentResolver.query(
                 uri,
                 arrayOf(OpenableColumns.DISPLAY_NAME),
@@ -68,7 +73,12 @@ fun FilesScreen() {
                 }
             } ?: "Imported file"
 
-            importedFiles.add(fileName to uri.toString())
+            ScrittoStore.addImportedFile(
+                ScrittoStore.ImportedFile(
+                    name = fileName,
+                    uri = uri.toString()
+                )
+            )
         }
     }
 
@@ -79,8 +89,8 @@ fun FilesScreen() {
             .padding(
                 start = 24.dp,
                 end = 24.dp,
-                top = 42.dp,
-                bottom = 112.dp
+                top = 72.dp,
+                bottom = 110.dp
             )
     ) {
         Column(
@@ -167,7 +177,7 @@ fun FilesScreen() {
                 ) {
                     items(
                         items = importedFiles,
-                        key = { it.second }
+                        key = { it.uri }
                     ) { file ->
                         Row(
                             modifier = Modifier
@@ -193,7 +203,7 @@ fun FilesScreen() {
                             )
 
                             Text(
-                                text = file.first,
+                                text = file.name,
                                 color = ScrittoCream,
                                 fontSize = 16.sp,
                                 maxLines = 1,
