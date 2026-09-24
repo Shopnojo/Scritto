@@ -1,7 +1,11 @@
 package com.internship.scritto.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +45,10 @@ fun NotesScreen(
     val notes = ScrittoStore.notes
 
     var noteToDelete by remember {
+        mutableStateOf<Note?>(null)
+    }
+
+    var noteForActions by remember {
         mutableStateOf<Note?>(null)
     }
 
@@ -98,14 +109,131 @@ fun NotesScreen(
                         key = { it.id }
                     ) { note ->
 
-                        NoteRow(
-                            note = note,
-                            onClick = {
-                                onNoteSelected(note.id)
-                            },
-                            onDelete = {
-                                noteToDelete = note
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut()
+                        ) {
+                            NoteRow(
+                                note = note,
+                                onClick = {
+                                    onNoteSelected(note.id)
+                                },
+                                onDelete = {
+                                    noteToDelete = note
+                                },
+                                onLongPress = {
+                                    noteForActions = note
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (noteForActions != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        MaterialTheme.colorScheme.background.copy(
+                            alpha = 0.72f
+                        )
+                    )
+                    .combinedClickable(
+                        onClick = {
+                            noteForActions = null
+                        },
+                        onLongClick = {}
+                    ),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = 20.dp,
+                            end = 20.dp,
+                            bottom = 24.dp
+                        )
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = noteForActions?.title?.ifBlank {
+                            "Untitled note"
+                        } ?: "Note",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Text(
+                        text = if (noteForActions?.isPinned == true) {
+                            "Pinned to Home"
+                        } else {
+                            "Note actions"
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                noteForActions?.let { note ->
+                                    ScrittoStore.setPinned(
+                                        note.id,
+                                        !note.isPinned
+                                    )
+                                }
+                                noteForActions = null
                             }
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PushPin,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        Spacer(modifier = Modifier.size(12.dp))
+
+                        Text(
+                            text = if (noteForActions?.isPinned == true) {
+                                "Unpin from Home"
+                            } else {
+                                "Pin to Home"
+                            },
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                noteToDelete = noteForActions
+                                noteForActions = null
+                            }
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Delete",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -205,7 +333,8 @@ fun NotesScreen(
 private fun NoteRow(
     note: Note,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onLongPress: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -216,9 +345,10 @@ private fun NoteRow(
                     alpha = 0.88f
                 )
             )
-            .clickable {
-                onClick()
-            }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            )
             .padding(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -249,15 +379,29 @@ private fun NoteRow(
             modifier = Modifier.weight(1f)
         ) {
 
-            Text(
-                text = note.title.ifBlank {
-                    "Untitled note"
-                },
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (note.isPinned) {
+                    Icon(
+                        imageVector = Icons.Outlined.PushPin,
+                        contentDescription = "Pinned",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+
+                Text(
+                    text = note.title.ifBlank {
+                        "Untitled note"
+                    },
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
 
             Spacer(
                 modifier = Modifier.height(4.dp)
