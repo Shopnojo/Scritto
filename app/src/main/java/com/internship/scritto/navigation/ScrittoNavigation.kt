@@ -85,7 +85,8 @@ fun ScrittoNavigation() {
             .background(MaterialTheme.colorScheme.background)
     ) {
         ScrittoMesh(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            aiReactive = currentRoute == AI_ROUTE
         )
 
         NavHost(
