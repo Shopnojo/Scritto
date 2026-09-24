@@ -125,7 +125,33 @@ fun ScrittoNavigation() {
             }
 
             composable(AI_ROUTE) {
-                AiChatScreen()
+                AiChatScreen(
+                    onHome = {
+                        selectedDockIndex = 0
+                        navController.navigate(HOME_ROUTE) {
+                            popUpTo(HOME_ROUTE) {
+                                inclusive = false
+                            }
+                            launchSingleTop = true
+                        }
+                    },
+                    onNotes = {
+                        selectedDockIndex = 1
+                        navController.navigate(NOTES_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onCreateNote = {
+                        val note = ScrittoStore.createNote()
+                        navController.navigate("note/${note.id}")
+                    },
+                    onSchedule = {
+                        selectedDockIndex = 2
+                        navController.navigate(SCHEDULE_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
             }
 
             composable(
