@@ -146,7 +146,9 @@ fun NoteEditorScreen(
     }
 
     var textAlign by remember(noteId) {
-        mutableStateOf(TextAlign.Left)
+        mutableStateOf(
+            textAlignFromStorage(note.textAlign)
+        )
     }
 
     val contentScrollState = rememberScrollState()
@@ -517,12 +519,12 @@ private fun textFieldValueFromNote(
                 fontWeight = if (span.bold) {
                     FontWeight.Bold
                 } else {
-                    FontWeight.Normal
+                    null
                 },
                 fontStyle = if (span.italic) {
                     FontStyle.Italic
                 } else {
-                    FontStyle.Normal
+                    null
                 },
                 textDecoration = when {
                     span.underline && span.strike -> {
@@ -536,7 +538,7 @@ private fun textFieldValueFromNote(
 
                     span.underline -> TextDecoration.Underline
                     span.strike -> TextDecoration.LineThrough
-                    else -> TextDecoration.None
+                    else -> null
                 }
             ),
             start,
