@@ -33,7 +33,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +66,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.internship.scritto.data.model.NoteSpan
 import com.internship.scritto.data.repository.ScrittoStore
 import com.internship.scritto.ui.theme.ScrittoAmber
 import com.internship.scritto.ui.theme.ScrittoBackground
@@ -108,11 +112,12 @@ fun NoteEditorScreen(
 
     var content by remember(noteId) {
         mutableStateOf(
-            TextFieldValue(
-                text = note.content,
-                selection = TextRange(note.content.length)
-            )
+            textFieldValueFromNote(note)
         )
+    }
+
+    var isPinned by rememberSaveable(noteId) {
+        mutableStateOf(note.isPinned)
     }
 
     // The toolbar can temporarily take the pointer interaction away from
@@ -151,7 +156,7 @@ fun NoteEditorScreen(
     // AUTOSAVE
     // --------------------------------------------------------------------
 
-    LaunchedEffect(title, content.text) {
+    LaunchedEffect(title, content, textAlign) {
         saveState = SaveState.SAVING
 
         delay(350)
@@ -159,7 +164,11 @@ fun NoteEditorScreen(
         ScrittoStore.updateNote(
             id = noteId,
             title = title,
-            content = content.text
+            content = content.text,
+            spans = noteSpansFromAnnotatedString(
+                content.annotatedString
+            ),
+            textAlign = textAlignToStorage(textAlign)
         )
 
         saveState = SaveState.SAVED
@@ -223,27 +232,72 @@ fun NoteEditorScreen(
                 )
             }
 
-            Crossfade(
-                targetState = saveState,
-                animationSpec = tween(
-                    durationMillis = 180,
-                    easing = FastOutSlowInEasing
-                ),
-                label = "save-state"
-            ) { state ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Crossfade(
+                    targetState = saveState,
+                    animationSpec = tween(
+                        durationMillis = 180,
+                        easing = FastOutSlowInEasing
+                    ),
+                    label = "save-state"
+                ) { state ->
 
-                Text(
-                    text = when (state) {
-                        SaveState.SAVING -> "Saving…"
-                        SaveState.SAVED -> "Saved"
-                    },
-                    color = when (state) {
-                        SaveState.SAVING -> ScrittoTextMuted
-                        SaveState.SAVED -> ScrittoAmber
-                    },
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                    Text(
+                        text = when (state) {
+                            SaveState.SAVING -> "Saving…"
+                            SaveState.SAVED -> "Saved"
+                        },
+                        color = when (state) {
+                            SaveState.SAVING -> ScrittoTextMuted
+                            SaveState.SAVED -> ScrittoAmber
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isPinned) {
+                                ScrittoAmber.copy(alpha = 0.14f)
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                        .clickable {
+                            isPinned = !isPinned
+                            ScrittoStore.setPinned(
+                                id = noteId,
+                                pinned = isPinned
+                            )
+
+                            view.performHapticFeedback(
+                                HapticFeedbackConstants.KEYBOARD_TAP
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PushPin,
+                        contentDescription = if (isPinned) {
+                            "Unpin note"
+                        } else {
+                            "Pin note"
+                        },
+                        tint = if (isPinned) {
+                            ScrittoAmber
+                        } else {
+                            ScrittoCream
+                        },
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
             }
         }
 
@@ -440,6 +494,105 @@ fun NoteEditorScreen(
                 }
             )
         }
+    }
+}
+
+// ========================================================================
+// RICH TEXT PERSISTENCE
+// ========================================================================
+
+private fun textFieldValueFromNote(
+    note: com.internship.scritto.data.model.Note
+): TextFieldValue {
+    val builder = AnnotatedString.Builder(note.content)
+
+    note.spans.forEach { span ->
+        val start = span.start.coerceIn(0, note.content.length)
+        val end = span.end.coerceIn(start, note.content.length)
+
+        if (start >= end) return@forEach
+
+        builder.addStyle(
+            SpanStyle(
+                fontWeight = if (span.bold) {
+                    FontWeight.Bold
+                } else {
+                    FontWeight.Normal
+                },
+                fontStyle = if (span.italic) {
+                    FontStyle.Italic
+                } else {
+                    FontStyle.Normal
+                },
+                textDecoration = when {
+                    span.underline && span.strike -> {
+                        TextDecoration.combine(
+                            listOf(
+                                TextDecoration.Underline,
+                                TextDecoration.LineThrough
+                            )
+                        )
+                    }
+
+                    span.underline -> TextDecoration.Underline
+                    span.strike -> TextDecoration.LineThrough
+                    else -> TextDecoration.None
+                }
+            ),
+            start,
+            end
+        )
+    }
+
+    return TextFieldValue(
+        annotatedString = builder.toAnnotatedString(),
+        selection = TextRange(note.content.length)
+    )
+}
+
+private fun noteSpansFromAnnotatedString(
+    value: AnnotatedString
+): List<NoteSpan> {
+    return value.spanStyles.mapNotNull { range ->
+        val bold = range.item.fontWeight == FontWeight.Bold
+        val italic = range.item.fontStyle == FontStyle.Italic
+        val decoration = range.item.textDecoration
+
+        val underline = decoration?.contains(TextDecoration.Underline) == true
+        val strike = decoration?.contains(TextDecoration.LineThrough) == true
+
+        if (!bold && !italic && !underline && !strike) {
+            null
+        } else {
+            NoteSpan(
+                start = range.start,
+                end = range.end,
+                bold = bold,
+                italic = italic,
+                underline = underline,
+                strike = strike
+            )
+        }
+    }
+}
+
+private fun textAlignToStorage(
+    alignment: TextAlign
+): String {
+    return when (alignment) {
+        TextAlign.Center -> "center"
+        TextAlign.Right -> "right"
+        else -> "left"
+    }
+}
+
+private fun textAlignFromStorage(
+    alignment: String
+): TextAlign {
+    return when (alignment) {
+        "center" -> TextAlign.Center
+        "right" -> TextAlign.Right
+        else -> TextAlign.Left
     }
 }
 
