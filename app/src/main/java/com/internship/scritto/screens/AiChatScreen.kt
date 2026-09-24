@@ -8,11 +8,19 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +38,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +51,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,11 +62,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
@@ -80,6 +92,7 @@ import com.internship.scritto.ui.theme.ScrittoCreamBright
 import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextMuted
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
+import com.internship.scritto.data.repository.ScrittoStore
 
 private data class ChatMessage(
     val text: String,
@@ -106,6 +119,17 @@ fun AiChatScreen(
     var focused by remember { mutableStateOf(false) }
     var islandExpanded by remember { mutableStateOf(false) }
     var placeholderIndex by remember { mutableIntStateOf(0) }
+    var recentsOpen by remember { mutableStateOf(false) }
+    var thinking by remember { mutableStateOf(false) }
+    var conversationId by remember { mutableStateOf(java.util.UUID.randomUUID().toString()) }
+    val scope = rememberCoroutineScope()
+
+    val recentConversations = remember {
+        mutableStateListOf<ScrittoStore.AiConversation>().apply {
+            addAll(ScrittoStore.getAiConversations())
+        }
+    }
+
     val listState = rememberLazyListState()
 
     val placeholders = remember {
@@ -133,48 +157,119 @@ fun AiChatScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .navigationBarsPadding()
-            .padding(start = 18.dp, end = 18.dp, top = 54.dp, bottom = 12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        AiAmbientGlow(Modifier.fillMaxSize())
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(start = 18.dp, end = 18.dp, top = 54.dp, bottom = 12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(ScrittoAmber),
-                contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.AutoAwesome,
-                    contentDescription = "Scritto AI",
-                    tint = MaterialTheme.colorScheme.background,
-                    modifier = Modifier.size(22.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(ScrittoAmber),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = "Scritto AI",
+                        tint = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "Scritto AI",
+                        color = ScrittoCreamBright,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Your workspace assistant",
+                        color = ScrittoTextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
             }
 
-            Column {
-                Text(
-                    text = "Scritto AI",
-                    color = ScrittoCreamBright,
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.SemiBold
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(ScrittoSurface.copy(alpha = 0.82f))
+                    .border(
+                        1.dp,
+                        ScrittoBorder.copy(alpha = 0.85f),
+                        RoundedCornerShape(18.dp)
+                    )
+                    .clickable { recentsOpen = !recentsOpen }
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.History,
+                    contentDescription = "Recent conversations",
+                    tint = if (recentsOpen) ScrittoAmberBright else ScrittoTextSecondary,
+                    modifier = Modifier.size(17.dp)
                 )
                 Text(
-                    text = "Your workspace assistant",
-                    color = ScrittoTextSecondary,
-                    fontSize = 13.sp
+                    text = "Recent",
+                    color = if (recentsOpen) ScrittoCreamBright else ScrittoTextSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        AnimatedVisibility(
+            visible = recentsOpen,
+            enter = slideInVertically(initialOffsetY = { -24 }) +
+                fadeIn(tween(220)) +
+                scaleIn(initialScale = 0.98f, animationSpec = tween(220)),
+            exit = fadeOut(tween(160)) +
+                scaleOut(targetScale = 0.98f, animationSpec = tween(160))
+        ) {
+            RecentConversations(
+                conversations = recentConversations,
+                onConversationSelected = { conversation ->
+                    conversationId = conversation.id
+                    messages.clear()
+                    messages.addAll(
+                        conversation.messages.map {
+                            ChatMessage(it.text, it.fromUser)
+                        }
+                    )
+                    if (messages.isEmpty()) {
+                        messages += ChatMessage(
+                            "Hey. I'm Scritto AI. Ask me to create something, find a note, or help organize your workspace.",
+                            false
+                        )
+                    }
+                    input = ""
+                    focused = false
+                    thinking = false
+                    recentsOpen = false
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         LazyColumn(
             modifier = Modifier
@@ -184,39 +279,49 @@ fun AiChatScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(top = 6.dp, bottom = 14.dp)
         ) {
-            items(messages) { message ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (message.fromUser) {
-                        Arrangement.End
-                    } else {
-                        Arrangement.Start
-                    }
+            itemsIndexed(
+                messages,
+                key = { index, message -> "$index-${message.fromUser}-${message.text}" }
+            ) { _, message ->
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(tween(260, delayMillis = 35)) +
+                        slideInHorizontally(
+                            initialOffsetX = { if (message.fromUser) 44 else -44 },
+                            animationSpec = tween(300, delayMillis = 35)
+                        ) +
+                        scaleIn(
+                            initialScale = 0.96f,
+                            animationSpec = tween(260, delayMillis = 35)
+                        )
                 ) {
-                    Text(
-                        text = message.text,
-                        color = if (message.fromUser) {
-                            MaterialTheme.colorScheme.background
-                        } else {
-                            ScrittoCream
-                        },
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
-                        modifier = Modifier
-                            .fillMaxWidth(0.86f)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                if (message.fromUser) {
-                                    ScrittoCreamBright
-                                } else {
-                                    ScrittoSurface.copy(alpha = 0.94f)
-                                }
-                            )
-                            .padding(horizontal = 16.dp, vertical = 13.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start
+                    ) {
+                        Text(
+                            text = message.text,
+                            color = if (message.fromUser) MaterialTheme.colorScheme.background else ScrittoCream,
+                            fontSize = 15.sp,
+                            lineHeight = 21.sp,
+                            modifier = Modifier
+                                .fillMaxWidth(0.86f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (message.fromUser) ScrittoCreamBright
+                                    else ScrittoSurface.copy(alpha = 0.94f)
+                                )
+                                .padding(horizontal = 16.dp, vertical = 13.dp)
+                        )
+                    }
                 }
             }
-        }
+
+            if (thinking) {
+                item(key = "thinking") {
+                    AiThinkingBubble()
+                }
+            }        }
 
         AiComposer(
             input = input,
@@ -226,12 +331,29 @@ fun AiChatScreen(
             placeholder = placeholders[placeholderIndex],
             onSend = {
                 val prompt = input.trim()
-                if (prompt.isNotEmpty()) {
+                if (prompt.isNotEmpty() && !thinking) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     messages += ChatMessage(prompt, true)
-                    messages += ChatMessage(aiReply(prompt), false)
                     input = ""
                     focused = false
+                    thinking = true
+
+                    scope.launch {
+                        kotlinx.coroutines.delay(620)
+                        messages += ChatMessage(aiReply(prompt), false)
+                        thinking = false
+
+                        ScrittoStore.saveAiConversation(
+                            id = conversationId,
+                            title = if (prompt.length > 44) prompt.take(44) + "…" else prompt,
+                            messages = messages.map {
+                                ScrittoStore.AiMessage(it.text, it.fromUser)
+                            }
+                        )
+
+                        recentConversations.clear()
+                        recentConversations.addAll(ScrittoStore.getAiConversations())
+                    }
                 }
             }
         )
@@ -248,6 +370,194 @@ fun AiChatScreen(
             onNotes = onNotes,
             onCreateNote = onCreateNote,
             onSchedule = onSchedule
+        )
+        }
+    }
+}
+
+@Composable
+private fun RecentConversations(
+    conversations: List<ScrittoStore.AiConversation>,
+    onConversationSelected: (ScrittoStore.AiConversation) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(ScrittoSurface.copy(alpha = 0.94f))
+            .border(1.dp, ScrittoBorder.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (conversations.isEmpty()) {
+            Text(
+                text = "No recent conversations yet",
+                color = ScrittoTextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(10.dp)
+            )
+        } else {
+            conversations.take(6).forEachIndexed { index, conversation ->
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(tween(180, delayMillis = index * 35)) +
+                        slideInHorizontally(
+                            initialOffsetX = { 24 },
+                            animationSpec = tween(220, delayMillis = index * 35)
+                        )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onConversationSelected(conversation) }
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(ScrittoAmber.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AutoAwesome,
+                                contentDescription = null,
+                                tint = ScrittoAmberBright,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(9.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = conversation.title,
+                                color = ScrittoCream,
+                                fontSize = 13.sp,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = conversation.messages.count { it.fromUser }.toString() + " messages",
+                                color = ScrittoTextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiThinkingBubble() {
+    val transition = rememberInfiniteTransition(label = "aiThinking")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "thinkingPulse"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(ScrittoSurface.copy(alpha = 0.94f))
+                .padding(horizontal = 16.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(3) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .graphicsLayer {
+                            alpha = (pulse - index * 0.18f).coerceIn(0.2f, 1f)
+                        }
+                        .clip(CircleShape)
+                        .background(ScrittoAmberBright)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiAmbientGlow(
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "aiAmbient")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(9000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ambientPhase"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ambientPulse"
+    )
+
+    Canvas(modifier = modifier) {
+        val margin = 54.dp.toPx()
+        val width = (size.width - margin * 2f).coerceAtLeast(1f)
+        val height = (size.height - margin * 2f).coerceAtLeast(1f)
+        val perimeter = 2f * (width + height)
+        var distance = phase * perimeter
+
+        val point = when {
+            distance < width -> Offset(margin + distance, margin)
+            distance < width + height -> {
+                distance -= width
+                Offset(size.width - margin, margin + distance)
+            }
+            distance < width * 2f + height -> {
+                distance -= width + height
+                Offset(size.width - margin - distance, size.height - margin)
+            }
+            else -> {
+                distance -= width * 2f + height
+                Offset(margin, size.height - margin - distance)
+            }
+        }
+
+        val radius = 115.dp.toPx()
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    ScrittoAmber.copy(alpha = 0.075f * pulse),
+                    Color.Transparent
+                ),
+                center = point,
+                radius = radius
+            ),
+            radius = radius,
+            center = point
+        )
+
+        drawCircle(
+            color = ScrittoAmberBright.copy(alpha = 0.045f * pulse),
+            radius = 38.dp.toPx(),
+            center = point
         )
     }
 }
