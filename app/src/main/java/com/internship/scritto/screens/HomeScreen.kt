@@ -25,7 +25,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,7 +57,8 @@ import com.internship.scritto.ui.theme.ScrittoTextSecondary
 fun HomeScreen(
     onNoteSelected: (String) -> Unit = {},
     onNewNote: () -> Unit = {},
-    onSchedule: () -> Unit = {}
+    onSchedule: () -> Unit = {},
+    onFiles: () -> Unit = {}
 ) {
     val pinnedNote = ScrittoStore.notes.firstOrNull { it.isPinned }
     val recentNotes = ScrittoStore.notes
@@ -172,9 +173,9 @@ fun HomeScreen(
 
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
-                title = "Schedule",
-                icon = Icons.Outlined.CalendarMonth,
-                onClick = onSchedule
+                title = "Files",
+                icon = Icons.Outlined.Folder,
+                onClick = onFiles
             )
         }
 
