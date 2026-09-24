@@ -3,6 +3,11 @@ package com.internship.scritto.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,11 +20,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 @Composable
 fun ScrittoMesh(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    aiReactive: Boolean = false
 ) {
     val density = LocalDensity.current
     val accent = MaterialTheme.colorScheme.primary
@@ -31,6 +38,17 @@ fun ScrittoMesh(
     var touchPosition by remember {
         mutableStateOf(Offset.Unspecified)
     }
+
+    val aiTransition = rememberInfiniteTransition(label = "aiMeshRipple")
+    val rippleProgress by aiTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5200),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rippleProgress"
+    )
 
     Canvas(
         modifier = modifier
@@ -63,6 +81,37 @@ fun ScrittoMesh(
                 var radius = baseRadius
                 var alpha = 0.28f
                 var drawPosition = point
+
+                if (aiReactive) {
+                    val focus = Offset(
+                        size.width * 0.48f,
+                        size.height * 0.46f
+                    )
+                    val dx = point.x - focus.x
+                    val dy = point.y - focus.y
+                    val distance = sqrt(dx * dx + dy * dy)
+                    val maxDistance = sqrt(
+                        size.width * size.width +
+                            size.height * size.height
+                    ) * 0.72f
+
+                    // A broad wave travels outward through the mesh. The
+                    // dots brighten as the wavefront passes them, then fade.
+                    val waveRadius = rippleProgress * maxDistance
+                    val waveWidth = with(density) { 150.dp.toPx() }
+                    val waveDistance = abs(distance - waveRadius)
+                    val waveInfluence =
+                        (1f - waveDistance / waveWidth).coerceIn(0f, 1f)
+                    val centerInfluence =
+                        (1f - distance / with(density) { 210.dp.toPx() })
+                            .coerceIn(0f, 1f)
+
+                    radius += baseRadius *
+                        (waveInfluence * 1.15f + centerInfluence * 0.45f)
+                    alpha +=
+                        waveInfluence * 0.34f +
+                            centerInfluence * 0.10f
+                }
 
                 if (touchPosition != Offset.Unspecified) {
                     val dx = touchPosition.x - point.x
