@@ -52,6 +52,9 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.9.4")
 
+    // Material outline icons for the compact Scritto dock
+    implementation("androidx.compose.material:material-icons-extended")
+
     testImplementation(libs.junit)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
