@@ -37,6 +37,7 @@ import androidx.navigation.navArgument
 import com.internship.scritto.components.ScrittoDock
 import com.internship.scritto.components.ScrittoMesh
 import com.internship.scritto.data.repository.ScrittoStore
+import com.internship.scritto.screens.AiChatScreen
 import com.internship.scritto.screens.HomeScreen
 import com.internship.scritto.screens.NoteEditorScreen
 import com.internship.scritto.screens.NotesScreen
@@ -45,6 +46,7 @@ import com.internship.scritto.screens.ScheduleScreen
 private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
 private const val SCHEDULE_ROUTE = "schedule"
+private const val AI_ROUTE = "ai"
 private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
 
 private data class CreateAction(
@@ -100,6 +102,12 @@ fun ScrittoNavigation() {
                         val createdNote = ScrittoStore.createNote()
                         createMenuExpanded = false
                         navController.navigate("note/${createdNote.id}")
+                    },
+                    onSchedule = {
+                        createMenuExpanded = false
+                        navController.navigate(SCHEDULE_ROUTE) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
@@ -114,6 +122,10 @@ fun ScrittoNavigation() {
 
             composable(SCHEDULE_ROUTE) {
                 ScheduleScreen()
+            }
+
+            composable(AI_ROUTE) {
+                AiChatScreen()
             }
 
             composable(
@@ -287,17 +299,14 @@ fun ScrittoNavigation() {
 
                             2 -> {
                                 createMenuExpanded = false
-                                // Tasks will be added next.
+                                navController.navigate(SCHEDULE_ROUTE) {
+                                    launchSingleTop = true
+                                }
                             }
 
                             3 -> {
                                 createMenuExpanded = false
-                                // Files will be added next.
-                            }
-
-                            4 -> {
-                                createMenuExpanded = false
-                                navController.navigate(SCHEDULE_ROUTE) {
+                                navController.navigate(AI_ROUTE) {
                                     launchSingleTop = true
                                 }
                             }
