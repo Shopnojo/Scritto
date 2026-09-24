@@ -94,6 +94,7 @@ import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextMuted
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
 import com.internship.scritto.data.repository.ScrittoStore
+import kotlinx.coroutines.launch
 
 private data class ChatMessage(
     val text: String,
