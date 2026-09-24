@@ -236,7 +236,7 @@ fun AiChatScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(44.dp))
 
         AiNavigationIsland(
             expanded = islandExpanded,
@@ -410,7 +410,7 @@ private fun AiComposer(
                 .graphicsLayer {
                     scaleX = sendScale
                     scaleY = sendScale
-                    translationY = 18.dp.toPx()
+                    translationY = 40.dp.toPx()
                 }
                 .clip(CircleShape)
                 .background(
