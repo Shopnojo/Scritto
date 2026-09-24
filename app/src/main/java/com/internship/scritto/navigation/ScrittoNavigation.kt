@@ -251,6 +251,7 @@ fun ScrittoNavigation() {
                 }
 
                 ScrittoDock(
+                    modifier = Modifier.align(Alignment.BottomCenter),
                     selectedIndex = selectedDockIndex,
                     onItemSelected = { index ->
                         selectedDockIndex = index
