@@ -165,7 +165,7 @@ fun AiChatScreen(
                 .fillMaxSize()
                 .imePadding()
                 .navigationBarsPadding()
-                .padding(start = 18.dp, end = 18.dp, top = 54.dp, bottom = 12.dp)
+                .padding(start = 24.dp, end = 24.dp, top = 72.dp, bottom = 12.dp)
         ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
