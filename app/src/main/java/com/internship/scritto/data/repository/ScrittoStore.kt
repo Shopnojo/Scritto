@@ -12,6 +12,19 @@ object ScrittoStore {
 
     private const val PREFS_NAME = "scritto_store"
     private const val NOTES_KEY = "notes"
+    private const val AI_CONVERSATIONS_KEY = "ai_conversations"
+
+    data class AiMessage(
+        val text: String,
+        val fromUser: Boolean
+    )
+
+    data class AiConversation(
+        val id: String,
+        val title: String,
+        val updatedAt: Long,
+        val messages: List<AiMessage>
+    )
 
     private val _notes = mutableStateListOf<Note>()
     val notes: List<Note>
@@ -108,6 +121,102 @@ object ScrittoStore {
 
         _notes.removeAll { it.id == id }
         persist()
+    }
+
+    fun getAiConversations(): List<AiConversation> {
+        checkInitialized()
+
+        val raw = preferences?.getString(AI_CONVERSATIONS_KEY, null)
+            ?: return emptyList()
+
+        return runCatching {
+            val array = JSONArray(raw)
+
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    val messagesArray = item.optJSONArray("messages") ?: JSONArray()
+
+                    val messages = buildList {
+                        for (messageIndex in 0 until messagesArray.length()) {
+                            val message = messagesArray.getJSONObject(messageIndex)
+                            add(
+                                AiMessage(
+                                    text = message.optString("text"),
+                                    fromUser = message.optBoolean("fromUser")
+                                )
+                            )
+                        }
+                    }
+
+                    add(
+                        AiConversation(
+                            id = item.getString("id"),
+                            title = item.optString("title"),
+                            updatedAt = item.optLong("updatedAt"),
+                            messages = messages
+                        )
+                    )
+                }
+            }.sortedByDescending { it.updatedAt }
+        }.getOrElse {
+            emptyList()
+        }
+    }
+
+    fun saveAiConversation(
+        id: String,
+        title: String,
+        messages: List<AiMessage>
+    ) {
+        checkInitialized()
+
+        val conversations = getAiConversations()
+            .filterNot { it.id == id }
+            .toMutableList()
+
+        conversations.add(
+            0,
+            AiConversation(
+                id = id,
+                title = title.ifBlank { "New conversation" },
+                updatedAt = System.currentTimeMillis(),
+                messages = messages
+            )
+        )
+
+        val trimmed = conversations.take(12)
+
+        preferences
+            ?.edit()
+            ?.putString(
+                AI_CONVERSATIONS_KEY,
+                JSONArray().apply {
+                    trimmed.forEach { conversation ->
+                        put(
+                            JSONObject().apply {
+                                put("id", conversation.id)
+                                put("title", conversation.title)
+                                put("updatedAt", conversation.updatedAt)
+                                put(
+                                    "messages",
+                                    JSONArray().apply {
+                                        conversation.messages.forEach { message ->
+                                            put(
+                                                JSONObject().apply {
+                                                    put("text", message.text)
+                                                    put("fromUser", message.fromUser)
+                                                }
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }.toString()
+            )
+            ?.apply()
     }
 
     private fun persist() {
