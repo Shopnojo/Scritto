@@ -40,6 +40,7 @@ import com.internship.scritto.data.repository.ScrittoStore
 import com.internship.scritto.screens.AiChatScreen
 import com.internship.scritto.screens.HomeScreen
 import com.internship.scritto.screens.NoteEditorScreen
+import com.internship.scritto.screens.FilesScreen
 import com.internship.scritto.screens.NotesScreen
 import com.internship.scritto.screens.ScheduleScreen
 
@@ -47,6 +48,7 @@ private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
 private const val SCHEDULE_ROUTE = "schedule"
 private const val AI_ROUTE = "ai"
+private const val FILES_ROUTE = "files"
 private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
 
 private data class CreateAction(
@@ -109,8 +111,18 @@ fun ScrittoNavigation() {
                         navController.navigate(SCHEDULE_ROUTE) {
                             launchSingleTop = true
                         }
+                    },
+                    onFiles = {
+                        createMenuExpanded = false
+                        navController.navigate(FILES_ROUTE) {
+                            launchSingleTop = true
+                        }
                     }
                 )
+            }
+
+            composable(FILES_ROUTE) {
+                FilesScreen()
             }
 
             composable(NOTES_ROUTE) {
