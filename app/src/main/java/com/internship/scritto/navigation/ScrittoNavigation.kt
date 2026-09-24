@@ -93,6 +93,11 @@ fun ScrittoNavigation() {
                 HomeScreen(
                     onNoteSelected = { noteId ->
                         navController.navigate("note/$noteId")
+                    },
+                    onNewNote = {
+                        val createdNote = ScrittoStore.createNote()
+                        createMenuExpanded = false
+                        navController.navigate("note/${createdNote.id}")
                     }
                 )
             }
