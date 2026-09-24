@@ -410,7 +410,7 @@ private fun AiComposer(
                 .graphicsLayer {
                     scaleX = sendScale
                     scaleY = sendScale
-                    translationY = 20.dp.toPx()
+                    translationY = 40.dp.toPx()
                 }
                 .clip(CircleShape)
                 .background(
