@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -41,7 +42,8 @@ private val dockItems = listOf(
     DockItem("Home", Icons.Outlined.Home),
     DockItem("Notes", Icons.Outlined.Description),
     DockItem("Tasks", Icons.Outlined.CheckCircle),
-    DockItem("Files", Icons.Outlined.Folder)
+    DockItem("Files", Icons.Outlined.Folder),
+    DockItem("Schedule", Icons.Outlined.CalendarMonth)
 )
 
 @Composable
@@ -98,7 +100,7 @@ fun ScrittoDock(
     ) {
         Row(
             modifier = Modifier.size(
-                width = 226.dp,
+                width = 286.dp,
                 height = 58.dp
             ),
             horizontalArrangement = Arrangement.SpaceEvenly,
