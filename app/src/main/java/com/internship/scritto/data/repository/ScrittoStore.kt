@@ -13,6 +13,7 @@ object ScrittoStore {
     private const val PREFS_NAME = "scritto_store"
     private const val NOTES_KEY = "notes"
     private const val AI_CONVERSATIONS_KEY = "ai_conversations"
+    private const val FILES_KEY = "imported_files"
 
     data class AiMessage(
         val text: String,
@@ -26,9 +27,18 @@ object ScrittoStore {
         val messages: List<AiMessage>
     )
 
+    data class ImportedFile(
+        val name: String,
+        val uri: String
+    )
+
     private val _notes = mutableStateListOf<Note>()
     val notes: List<Note>
         get() = _notes
+
+    private val _importedFiles = mutableStateListOf<ImportedFile>()
+    val importedFiles: List<ImportedFile>
+        get() = _importedFiles
 
     private var initialized = false
     private var preferences: android.content.SharedPreferences? = null
@@ -43,6 +53,8 @@ object ScrittoStore {
 
         _notes.clear()
         _notes.addAll(loadNotes())
+        _importedFiles.clear()
+        _importedFiles.addAll(loadImportedFiles())
         initialized = true
     }
 
@@ -121,6 +133,15 @@ object ScrittoStore {
 
         _notes.removeAll { it.id == id }
         persist()
+    }
+
+    fun addImportedFile(file: ImportedFile) {
+        checkInitialized()
+
+        if (_importedFiles.none { it.uri == file.uri }) {
+            _importedFiles.add(0, file)
+            persistImportedFiles()
+        }
     }
 
     fun getAiConversations(): List<AiConversation> {
@@ -217,6 +238,45 @@ object ScrittoStore {
                 }.toString()
             )
             ?.apply()
+    }
+
+    private fun persistImportedFiles() {
+        preferences
+            ?.edit()
+            ?.putString(
+                FILES_KEY,
+                JSONArray().apply {
+                    _importedFiles.forEach { file ->
+                        put(
+                            JSONObject().apply {
+                                put("name", file.name)
+                                put("uri", file.uri)
+                            }
+                        )
+                    }
+                }.toString()
+            )
+            ?.apply()
+    }
+
+    private fun loadImportedFiles(): List<ImportedFile> {
+        val raw = preferences?.getString(FILES_KEY, null)
+            ?: return emptyList()
+
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    add(
+                        ImportedFile(
+                            name = item.optString("name", "Imported file"),
+                            uri = item.optString("uri")
+                        )
+                    )
+                }
+            }
+        }.getOrElse { emptyList() }
     }
 
     private fun persist() {
