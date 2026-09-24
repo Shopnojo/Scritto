@@ -8,7 +8,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -67,7 +66,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -500,66 +498,59 @@ private fun AiAmbientGlow(
     modifier: Modifier = Modifier
 ) {
     val transition = rememberInfiniteTransition(label = "aiAmbient")
-    val phase by transition.animateFloat(
+    val drift by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(9000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ambientPhase"
-    )
-    val pulse by transition.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
+            animation = tween(7000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "ambientPulse"
+        label = "ambientDrift"
+    )
+    val breath by transition.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ambientBreath"
     )
 
     Canvas(modifier = modifier) {
-        val margin = 54.dp.toPx()
-        val width = (size.width - margin * 2f).coerceAtLeast(1f)
-        val height = (size.height - margin * 2f).coerceAtLeast(1f)
-        val perimeter = 2f * (width + height)
-        var distance = phase * perimeter
-
-        val point = when {
-            distance < width -> Offset(margin + distance, margin)
-            distance < width + height -> {
-                distance -= width
-                Offset(size.width - margin, margin + distance)
-            }
-            distance < width * 2f + height -> {
-                distance -= width + height
-                Offset(size.width - margin - distance, size.height - margin)
-            }
-            else -> {
-                distance -= width * 2f + height
-                Offset(margin, size.height - margin - distance)
-            }
-        }
-
-        val radius = 115.dp.toPx()
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    ScrittoAmber.copy(alpha = 0.075f * pulse),
-                    Color.Transparent
-                ),
-                center = point,
-                radius = radius
-            ),
-            radius = radius,
-            center = point
+        // A soft, nearly imperceptible amber haze moves slowly through the
+        // background. There is no travelling orb or visible geometric path.
+        val topCenter = androidx.compose.ui.geometry.Offset(
+            x = size.width * (0.28f + drift * 0.18f),
+            y = size.height * 0.18f
+        )
+        val lowerCenter = androidx.compose.ui.geometry.Offset(
+            x = size.width * (0.72f - drift * 0.14f),
+            y = size.height * 0.76f
         )
 
-        drawCircle(
-            color = ScrittoAmberBright.copy(alpha = 0.045f * pulse),
-            radius = 38.dp.toPx(),
-            center = point
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    ScrittoAmber.copy(alpha = 0.045f * breath),
+                    ScrittoAmber.copy(alpha = 0.018f * breath),
+                    Color.Transparent
+                ),
+                center = topCenter,
+                radius = size.width * 0.52f
+            )
+        )
+
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    ScrittoAmberBright.copy(alpha = 0.026f * breath),
+                    ScrittoAmber.copy(alpha = 0.010f * breath),
+                    Color.Transparent
+                ),
+                center = lowerCenter,
+                radius = size.width * 0.62f
+            )
         )
     }
 }
