@@ -2,6 +2,7 @@ package com.internship.scritto.components
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
@@ -71,6 +72,18 @@ fun ScrittoDock(
         if (expanded) 45f else 0f
     }
 
+    val plusBackground by transition.animateColor(
+        transitionSpec = {
+            tween(
+                durationMillis = 320,
+                easing = FastOutSlowInEasing
+            )
+        },
+        label = "dockPlusBackground"
+    ) { expanded ->
+        if (expanded) colorScheme.primary else colorScheme.onSurface
+    }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
@@ -110,7 +123,7 @@ fun ScrittoDock(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(colorScheme.onSurface)
+                    .background(plusBackground)
                     .clickable {
                         onPlusClicked()
                         view.performHapticFeedback(
