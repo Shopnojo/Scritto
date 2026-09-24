@@ -50,7 +50,8 @@ import com.internship.scritto.ui.theme.ScrittoTextSecondary
 
 @Composable
 fun HomeScreen(
-    onNoteSelected: (String) -> Unit = {}
+    onNoteSelected: (String) -> Unit = {},
+    onNewNote: () -> Unit = {}
 ) {
     val pinnedNote = ScrittoStore.notes.firstOrNull { it.isPinned }
     val recentNote = ScrittoStore.notes.firstOrNull { !it.isPinned }
@@ -138,7 +139,8 @@ fun HomeScreen(
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
                 title = "Note",
-                icon = "✦"
+                icon = "✦",
+                onClick = onNewNote
             )
 
             HomeQuickAction(
@@ -295,7 +297,8 @@ private fun HomeCommandBar(
 private fun HomeQuickAction(
     modifier: Modifier = Modifier,
     title: String,
-    icon: String
+    icon: String,
+    onClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -311,7 +314,7 @@ private fun HomeQuickAction(
                 color = ScrittoBorderSubtle,
                 shape = RoundedCornerShape(18.dp)
             )
-            .clickable { },
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
