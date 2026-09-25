@@ -181,7 +181,9 @@ object ScrittoStore {
         val index = _tasks.indexOfFirst { it.id == id }
         if (index == -1) return
 
-        val task = _tasks[index].copy(completed = completed)
+        val task = _tasks[index].copy(completed = completed,
+            completedAt = if (completed) System.currentTimeMillis() else null
+        )
         _tasks[index] = task
         persistTasks()
 
@@ -219,6 +221,7 @@ object ScrittoStore {
                                 put("priority", task.priority.name)
                                 put("completed", task.completed)
                                 put("createdAt", task.createdAt)
+                                put("completedAt", task.completedAt ?: 0L)
                             }
                         )
                     }
@@ -256,7 +259,8 @@ object ScrittoStore {
                             createdAt = item.optLong(
                                 "createdAt",
                                 System.currentTimeMillis()
-                            )
+                            ),
+                            completedAt = item.optLong("completedAt", 0L).takeIf { it > 0L }
                         )
                     )
                 }
