@@ -54,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -632,9 +631,9 @@ private fun TaskRow(
     }
 
     val glowElevation = when {
-        overdue -> 16.dp
-        task.completed -> 10.dp
-        else -> 10.dp
+        overdue -> 12.dp
+        task.completed -> 8.dp
+        else -> 8.dp
     }
 
     val taskShape = RoundedCornerShape(20.dp)
@@ -647,38 +646,12 @@ private fun TaskRow(
                 shape = taskShape,
                 clip = false,
                 ambientColor = glowColor.copy(
-                    alpha = if (overdue) 0.62f else 0.42f
+                    alpha = if (overdue) 0.50f else 0.28f
                 ),
                 spotColor = glowColor.copy(
-                    alpha = if (overdue) 0.52f else 0.34f
+                    alpha = if (overdue) 0.42f else 0.22f
                 )
             )
-            .drawBehind {
-                val outerAlpha = if (overdue) 0.30f else 0.20f
-                val midAlpha = if (overdue) 0.44f else 0.30f
-                val edgeAlpha = if (overdue) 0.78f else 0.58f
-
-                drawRoundRect(
-                    color = glowColor.copy(alpha = outerAlpha),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 14.dp.toPx()
-                    )
-                )
-
-                drawRoundRect(
-                    color = glowColor.copy(alpha = midAlpha),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 7.dp.toPx()
-                    )
-                )
-
-                drawRoundRect(
-                    color = glowColor.copy(alpha = edgeAlpha),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 2.dp.toPx()
-                    )
-                )
-            }
             .clip(taskShape)
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
