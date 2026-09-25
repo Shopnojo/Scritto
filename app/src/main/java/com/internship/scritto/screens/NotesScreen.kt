@@ -54,9 +54,8 @@ fun NotesScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-             ) {
+        modifier = Modifier.fillMaxSize()
+    ) {
 
         Column(
             modifier = Modifier
