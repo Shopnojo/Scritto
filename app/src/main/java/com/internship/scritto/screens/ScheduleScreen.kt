@@ -322,6 +322,7 @@ private fun AddTaskPanel(
                 )
                 .clip(RoundedCornerShape(28.dp))
                 .background(MaterialTheme.colorScheme.surface)
+                .clickable(enabled = false) {}
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -640,7 +641,6 @@ private fun TaskRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
             .drawBehind {
                 drawRoundRect(
                     color = glowColor.copy(alpha = glowStrength * 0.35f),
@@ -655,6 +655,7 @@ private fun TaskRow(
                     )
                 )
             }
+            .clip(RoundedCornerShape(20.dp))
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
             )
