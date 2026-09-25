@@ -18,6 +18,13 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.NoteAdd
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,15 +63,15 @@ private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
 
 private data class CreateAction(
     val label: String,
-    val symbol: String
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
 )
 
 private val createActions = listOf(
-    CreateAction("New Note", "▤"),
-    CreateAction("New Task", "✓"),
-    CreateAction("Add Event", "◷"),
-    CreateAction("Add Class", "□"),
-    CreateAction("Import File", "↓")
+    CreateAction("New Note", Icons.Outlined.Description),
+    CreateAction("New Task", Icons.Outlined.CheckCircle),
+    CreateAction("Add Event", Icons.Outlined.Event),
+    CreateAction("Add Class", Icons.Outlined.CalendarMonth),
+    CreateAction("Import File", Icons.Outlined.NoteAdd)
 )
 
 @Composable
@@ -336,9 +343,11 @@ fun ScrittoNavigation() {
                                 verticalAlignment =
                                     Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = action.symbol,
-                                    color = MaterialTheme.colorScheme.primary
+                                Icon(
+                                    imageVector = action.icon,
+                                    contentDescription = action.label,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.requiredWidth(20.dp)
                                 )
 
                                 Text(
