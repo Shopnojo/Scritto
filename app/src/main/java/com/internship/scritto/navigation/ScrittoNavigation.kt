@@ -157,6 +157,13 @@ fun ScrittoNavigation() {
                         navController.navigate(FILES_ROUTE) {
                             launchSingleTop = true
                         }
+                    },
+                    onTasks = {
+                        createMenuExpanded = false
+                        selectedDockIndex = 2
+                        navController.navigate(SCHEDULE_ROUTE) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
