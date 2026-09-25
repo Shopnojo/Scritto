@@ -7,7 +7,8 @@ data class Task(
     val dueAt: Long,
     val priority: Priority = Priority.MEDIUM,
     val completed: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val completedAt: Long? = null
 ) {
     enum class Priority {
         LOW,
