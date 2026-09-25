@@ -58,7 +58,8 @@ fun HomeScreen(
     onNoteSelected: (String) -> Unit = {},
     onNewNote: () -> Unit = {},
     onSchedule: () -> Unit = {},
-    onFiles: () -> Unit = {}
+    onFiles: () -> Unit = {},
+    onTasks: () -> Unit = {}
 ) {
     val pinnedNote = ScrittoStore.notes.firstOrNull { it.isPinned }
     val recentNotes = ScrittoStore.notes
@@ -155,7 +156,8 @@ fun HomeScreen(
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
                 title = "Task",
-                icon = Icons.Outlined.CheckCircle
+                icon = Icons.Outlined.CheckCircle,
+                onClick = onTasks
             )
 
             HomeQuickAction(
