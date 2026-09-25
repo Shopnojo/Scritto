@@ -43,7 +43,7 @@ data class DockItem(
 private val dockItems = listOf(
     DockItem("Home", Icons.Outlined.Home),
     DockItem("Notes", Icons.Outlined.Description),
-    DockItem("Tasks", Icons.Outlined.CalendarMonth),
+    DockItem("Tasks", Icons.Outlined.CheckCircle),
     DockItem("AI", Icons.Outlined.AutoAwesome)
 )
 
