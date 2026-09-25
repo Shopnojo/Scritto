@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
@@ -108,8 +109,7 @@ fun ScheduleScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+             ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -288,7 +288,7 @@ private fun AddTaskPanel(
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var selectedDate by remember { mutableStateOf<Long?>(null) }
+    var selectedDate by remember { mutableStateOf(startOfTodayMillis()) }
     var selectedHour by remember { mutableStateOf<Int?>(null) }
     var selectedMinute by remember { mutableStateOf<Int?>(null) }
     var priority by remember { mutableStateOf(Task.Priority.MEDIUM) }
@@ -354,7 +354,7 @@ private fun AddTaskPanel(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Outlined.CalendarToday,
                     text = selectedDate?.let(::formatDate) ?: "Due date",
-                    selected = selectedDate != null,
+                    selected = true,
                     onClick = { showDatePicker = true }
                 )
 
@@ -459,7 +459,7 @@ private fun AddTaskPanel(
         val datePickerState =
             androidx.compose.material3.rememberDatePickerState(
                 initialSelectedDateMillis =
-                    selectedDate ?: System.currentTimeMillis()
+                    selectedDate
             )
 
         DatePickerDialog(
@@ -627,35 +627,34 @@ private fun TaskRow(
         !task.completed && task.dueAt < System.currentTimeMillis()
 
     val glowColor = when {
-        overdue -> MaterialTheme.colorScheme.error
-        task.completed -> androidx.compose.ui.graphics.Color(0xFF86D99B)
-        else -> MaterialTheme.colorScheme.primary
+        overdue -> androidx.compose.ui.graphics.Color(0xFFFF4D4D)
+        task.completed -> androidx.compose.ui.graphics.Color(0xFF8DFF9A)
+        else -> androidx.compose.ui.graphics.Color(0xFFFFB12B)
     }
 
-    val glowStrength = when {
-        overdue -> 0.34f
-        task.completed -> 0.18f
-        else -> 0.20f
+    val glowElevation = when {
+        overdue -> 9.dp
+        task.completed -> 5.dp
+        else -> 5.dp
     }
+
+    val taskShape = RoundedCornerShape(20.dp)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .drawBehind {
-                drawRoundRect(
-                    color = glowColor.copy(alpha = glowStrength * 0.35f),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 10.dp.toPx()
-                    )
+            .shadow(
+                elevation = glowElevation,
+                shape = taskShape,
+                clip = false,
+                ambientColor = glowColor.copy(
+                    alpha = if (overdue) 0.42f else 0.24f
+                ),
+                spotColor = glowColor.copy(
+                    alpha = if (overdue) 0.34f else 0.18f
                 )
-                drawRoundRect(
-                    color = glowColor.copy(alpha = glowStrength),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 2.dp.toPx()
-                    )
-                )
-            }
-            .clip(RoundedCornerShape(20.dp))
+            )
+            .clip(taskShape)
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
             )
@@ -750,7 +749,7 @@ private fun TaskRow(
                     Text(
                         text = dueLabel(task.dueAt),
                         color = if (overdue) {
-                            MaterialTheme.colorScheme.error
+                            androidx.compose.ui.graphics.Color(0xFFFF5A5A)
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
@@ -759,18 +758,22 @@ private fun TaskRow(
                             FontWeight.SemiBold
                         } else {
                             FontWeight.Normal
-                        }
+                        },
+                        maxLines = 1
                     )
+                }
 
-                    if (!task.completed) {
-                        Text(
-                            text = "• reminder on",
-                            color = MaterialTheme.colorScheme.primary.copy(
-                                alpha = 0.72f
-                            ),
-                            fontSize = 12.sp
-                        )
-                    }
+                if (!task.completed) {
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "• reminder on",
+                        color = MaterialTheme.colorScheme.primary.copy(
+                            alpha = 0.72f
+                        ),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
@@ -957,4 +960,14 @@ private fun isSameDay(first: Long, second: Long): Boolean {
 
     return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
         a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
+}
+
+
+private fun startOfTodayMillis(): Long {
+    return Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }
