@@ -631,9 +631,9 @@ private fun TaskRow(
     }
 
     val glowElevation = when {
-        overdue -> 12.dp
-        task.completed -> 8.dp
-        else -> 8.dp
+        overdue -> 24.dp
+        task.completed -> 18.dp
+        else -> 18.dp
     }
 
     val taskShape = RoundedCornerShape(20.dp)
@@ -646,10 +646,10 @@ private fun TaskRow(
                 shape = taskShape,
                 clip = false,
                 ambientColor = glowColor.copy(
-                    alpha = if (overdue) 0.50f else 0.28f
+                    alpha = if (overdue) 0.82f else 0.62f
                 ),
                 spotColor = glowColor.copy(
-                    alpha = if (overdue) 0.42f else 0.22f
+                    alpha = if (overdue) 0.70f else 0.48f
                 )
             )
             .clip(taskShape)
