@@ -2,6 +2,7 @@ package com.internship.scritto.navigation
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
@@ -77,6 +78,24 @@ fun ScrittoNavigation() {
 
     var splashVisible by rememberSaveable { mutableStateOf(true) }
 
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (splashVisible) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = 360,
+            easing = FastOutSlowInEasing
+        ),
+        label = "content_alpha"
+    )
+
+    val contentScale by animateFloatAsState(
+        targetValue = if (splashVisible) 0.985f else 1f,
+        animationSpec = tween(
+            durationMillis = 420,
+            easing = FastOutSlowInEasing
+        ),
+        label = "content_scale"
+    )
+
     var selectedDockIndex by remember {
         mutableStateOf(0)
     }
@@ -90,7 +109,16 @@ fun ScrittoNavigation() {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        ScrittoMesh(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = contentAlpha
+                    scaleX = contentScale
+                    scaleY = contentScale
+                }
+        ) {
+            ScrittoMesh(
             modifier = Modifier.fillMaxSize(),
             aiReactive = currentRoute == AI_ROUTE
         )
@@ -361,6 +389,8 @@ fun ScrittoNavigation() {
                     createMenuExpanded = createMenuExpanded
                 )
             }
+        }
+
         }
 
         if (splashVisible) {
