@@ -1,3 +1,4 @@
+@androidx.compose.material3.ExperimentalMaterial3Api
 package com.internship.scritto.screens
 
 import android.Manifest
