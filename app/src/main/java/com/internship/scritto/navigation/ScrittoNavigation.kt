@@ -319,6 +319,12 @@ fun ScrittoNavigation() {
                                                     "note/${note.id}"
                                                 )
                                             }
+                                            "New Task" -> {
+                                                createMenuExpanded = false
+                                                navController.navigate(SCHEDULE_ROUTE) {
+                                                    launchSingleTop = true
+                                                }
+                                            }
                                         }
                                     }
                                     .padding(
