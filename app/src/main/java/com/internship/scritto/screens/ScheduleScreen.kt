@@ -465,7 +465,7 @@ private fun AddTaskPanel(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        selectedDate = datePickerState.selectedDateMillis
+                        datePickerState.selectedDateMillis?.let { selectedDate = it }
                         showDatePicker = false
                     }
                 ) {
