@@ -4,6 +4,6 @@
     <style name="Theme.Scritto" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">#0B0B0A</item>
         <item name="android:windowSplashScreenBackground">#0B0B0A</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/transparent_splash_icon</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@null</item>
     </style>
 </resources>
