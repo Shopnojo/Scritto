@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.mutableStateListOf
 import com.internship.scritto.data.model.Note
 import com.internship.scritto.data.model.NoteSpan
+import com.internship.scritto.data.model.Task
+import com.internship.scritto.notifications.TaskReminderScheduler
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -12,6 +14,7 @@ object ScrittoStore {
 
     private const val PREFS_NAME = "scritto_store"
     private const val NOTES_KEY = "notes"
+    private const val TASKS_KEY = "tasks"
     private const val AI_CONVERSATIONS_KEY = "ai_conversations"
     private const val FILES_KEY = "imported_files"
 
@@ -36,6 +39,10 @@ object ScrittoStore {
     val notes: List<Note>
         get() = _notes
 
+    private val _tasks = mutableStateListOf<Task>()
+    val tasks: List<Task>
+        get() = _tasks
+
     private val _importedFiles = mutableStateListOf<ImportedFile>()
     val importedFiles: List<ImportedFile>
         get() = _importedFiles
@@ -53,8 +60,13 @@ object ScrittoStore {
 
         _notes.clear()
         _notes.addAll(loadNotes())
+
+        _tasks.clear()
+        _tasks.addAll(loadTasks())
+
         _importedFiles.clear()
         _importedFiles.addAll(loadImportedFiles())
+
         initialized = true
     }
 
@@ -133,6 +145,123 @@ object ScrittoStore {
 
         _notes.removeAll { it.id == id }
         persist()
+    }
+
+    fun createTask(
+        context: Context,
+        title: String,
+        description: String,
+        dueAt: Long,
+        priority: Task.Priority
+    ): Task {
+        checkInitialized()
+
+        val task = Task(
+            id = UUID.randomUUID().toString(),
+            title = title.trim(),
+            description = description.trim(),
+            dueAt = dueAt,
+            priority = priority
+        )
+
+        _tasks.add(task)
+        persistTasks()
+        TaskReminderScheduler.schedule(context.applicationContext, task)
+
+        return task
+    }
+
+    fun setTaskCompleted(
+        context: Context,
+        id: String,
+        completed: Boolean
+    ) {
+        checkInitialized()
+
+        val index = _tasks.indexOfFirst { it.id == id }
+        if (index == -1) return
+
+        val task = _tasks[index].copy(completed = completed)
+        _tasks[index] = task
+        persistTasks()
+
+        if (completed) {
+            TaskReminderScheduler.cancel(context.applicationContext, id)
+        } else {
+            TaskReminderScheduler.schedule(context.applicationContext, task)
+        }
+    }
+
+    fun deleteTask(
+        context: Context,
+        id: String
+    ) {
+        checkInitialized()
+
+        TaskReminderScheduler.cancel(context.applicationContext, id)
+        _tasks.removeAll { it.id == id }
+        persistTasks()
+    }
+
+    private fun persistTasks() {
+        preferences
+            ?.edit()
+            ?.putString(
+                TASKS_KEY,
+                JSONArray().apply {
+                    _tasks.forEach { task ->
+                        put(
+                            JSONObject().apply {
+                                put("id", task.id)
+                                put("title", task.title)
+                                put("description", task.description)
+                                put("dueAt", task.dueAt)
+                                put("priority", task.priority.name)
+                                put("completed", task.completed)
+                                put("createdAt", task.createdAt)
+                            }
+                        )
+                    }
+                }.toString()
+            )
+            ?.apply()
+    }
+
+    private fun loadTasks(): List<Task> {
+        val raw = preferences?.getString(TASKS_KEY, null)
+            ?: return emptyList()
+
+        return runCatching {
+            val array = JSONArray(raw)
+
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+
+                    add(
+                        Task(
+                            id = item.getString("id"),
+                            title = item.optString("title"),
+                            description = item.optString("description"),
+                            dueAt = item.optLong("dueAt"),
+                            priority = runCatching {
+                                Task.Priority.valueOf(
+                                    item.optString(
+                                        "priority",
+                                        Task.Priority.MEDIUM.name
+                                    )
+                                )
+                            }.getOrDefault(Task.Priority.MEDIUM),
+                            completed = item.optBoolean("completed", false),
+                            createdAt = item.optLong(
+                                "createdAt",
+                                System.currentTimeMillis()
+                            )
+                        )
+                    )
+                }
+            }
+        }.getOrElse { emptyList() }
     }
 
     fun addImportedFile(file: ImportedFile) {
