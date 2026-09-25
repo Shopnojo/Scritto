@@ -21,11 +21,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,13 +80,30 @@ fun ScheduleScreen() {
             contract = ActivityResultContracts.RequestPermission()
         ) { }
 
+    val now = System.currentTimeMillis()
+    val completedRetention = 24L * 60L * 60L * 1000L
+
     val pending = tasks
         .filterNot { it.completed }
-        .sortedBy { it.dueAt }
+        .sortedWith(
+            compareBy<Task> {
+                when (it.priority) {
+                    Task.Priority.HIGH -> 0
+                    Task.Priority.MEDIUM -> 1
+                    Task.Priority.LOW -> 2
+                }
+            }.thenBy { it.dueAt }
+        )
 
     val completed = tasks
-        .filter { it.completed }
-        .sortedByDescending { it.dueAt }
+        .filter {
+            it.completed &&
+                it.completedAt != null &&
+                now - it.completedAt < completedRetention
+        }
+        .sortedWith(
+            compareByDescending<Task> { it.completedAt ?: 0L }
+        )
 
     Box(
         modifier = Modifier
@@ -292,14 +313,16 @@ private fun AddTaskPanel(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
                 .navigationBarsPadding()
                 .padding(
                     start = 20.dp,
                     end = 20.dp,
-                    bottom = 18.dp
+                    bottom = 92.dp
                 )
                 .clip(RoundedCornerShape(28.dp))
                 .background(MaterialTheme.colorScheme.surface)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -599,17 +622,39 @@ private fun TaskRow(
         label = "task_alpha"
     )
 
-    val priorityAlpha =
-        when (task.priority) {
-            Task.Priority.HIGH -> 1f
-            Task.Priority.MEDIUM -> 0.72f
-            Task.Priority.LOW -> 0.45f
-        }
+    val overdue =
+        !task.completed && task.dueAt < System.currentTimeMillis()
+
+    val glowColor = when {
+        overdue -> MaterialTheme.colorScheme.error
+        task.completed -> androidx.compose.ui.graphics.Color(0xFF86D99B)
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    val glowStrength = when {
+        overdue -> 0.34f
+        task.completed -> 0.18f
+        else -> 0.20f
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
+            .drawBehind {
+                drawRoundRect(
+                    color = glowColor.copy(alpha = glowStrength * 0.35f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 10.dp.toPx()
+                    )
+                )
+                drawRoundRect(
+                    color = glowColor.copy(alpha = glowStrength),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.dp.toPx()
+                    )
+                )
+            }
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
             )
@@ -678,28 +723,42 @@ private fun TaskRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(
-                                    alpha = priorityAlpha
-                                )
+                    Text(
+                        text = task.priority.name.lowercase().replaceFirstChar {
+                            it.uppercase()
+                        },
+                        color = when (task.priority) {
+                            Task.Priority.HIGH -> MaterialTheme.colorScheme.primary
+                            Task.Priority.MEDIUM -> MaterialTheme.colorScheme.onSurfaceVariant
+                            Task.Priority.LOW -> MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.70f
                             )
+                        },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Text(
+                        text = "•",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                            alpha = 0.55f
+                        ),
+                        fontSize = 11.sp
                     )
 
                     Text(
                         text = dueLabel(task.dueAt),
-                        color = if (
-                            !task.completed &&
-                            task.dueAt < System.currentTimeMillis()
-                        ) {
+                        color = if (overdue) {
                             MaterialTheme.colorScheme.error
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        fontWeight = if (overdue) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        }
                     )
 
                     if (!task.completed) {
