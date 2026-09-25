@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.internship.scritto.screens
 
 import android.Manifest
@@ -257,7 +259,6 @@ fun ScheduleScreen() {
     }
 }
 
-@androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 private fun AddTaskPanel(
     context: Context,
