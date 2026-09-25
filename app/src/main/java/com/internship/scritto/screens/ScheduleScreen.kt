@@ -631,9 +631,9 @@ private fun TaskRow(
     }
 
     val glowElevation = when {
-        overdue -> 9.dp
-        task.completed -> 5.dp
-        else -> 5.dp
+        overdue -> 16.dp
+        task.completed -> 10.dp
+        else -> 10.dp
     }
 
     val taskShape = RoundedCornerShape(20.dp)
@@ -646,12 +646,38 @@ private fun TaskRow(
                 shape = taskShape,
                 clip = false,
                 ambientColor = glowColor.copy(
-                    alpha = if (overdue) 0.42f else 0.24f
+                    alpha = if (overdue) 0.62f else 0.42f
                 ),
                 spotColor = glowColor.copy(
-                    alpha = if (overdue) 0.34f else 0.18f
+                    alpha = if (overdue) 0.52f else 0.34f
                 )
             )
+            .drawBehind {
+                val outerAlpha = if (overdue) 0.30f else 0.20f
+                val midAlpha = if (overdue) 0.44f else 0.30f
+                val edgeAlpha = if (overdue) 0.78f else 0.58f
+
+                drawRoundRect(
+                    color = glowColor.copy(alpha = outerAlpha),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 14.dp.toPx()
+                    )
+                )
+
+                drawRoundRect(
+                    color = glowColor.copy(alpha = midAlpha),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 7.dp.toPx()
+                    )
+                )
+
+                drawRoundRect(
+                    color = glowColor.copy(alpha = edgeAlpha),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.dp.toPx()
+                    )
+                )
+            }
             .clip(taskShape)
             .background(
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
