@@ -7,59 +7,29 @@ import android.app.TimePickerDialog
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Alarm
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.internship.scritto.data.model.ScheduleEvent
 import com.internship.scritto.data.model.Task
 import com.internship.scritto.data.repository.ScrittoStore
 import java.text.SimpleDateFormat
@@ -67,905 +37,366 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private const val DAY_MILLIS = 24L * 60L * 60L * 1000L
+
+private data class TimelineItem(
+    val time: Long,
+    val title: String,
+    val subtitle: String,
+    val kind: Kind,
+    val eventId: String? = null,
+    val priority: Task.Priority? = null
+) {
+    enum class Kind { EVENT, CLASS, TASK }
+}
+
 @Composable
 fun ScheduleScreen() {
     val context = LocalContext.current
+    val events = ScrittoStore.events
     val tasks = ScrittoStore.tasks
+    val today = startOfDay(System.currentTimeMillis())
+    var selectedDay by remember { mutableStateOf(today) }
+    var showAdd by remember { mutableStateOf(false) }
+    var deleteEvent by remember { mutableStateOf<ScheduleEvent?>(null) }
 
-    var showAddTask by remember { mutableStateOf(false) }
-    var taskForDelete by remember { mutableStateOf<Task?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    val notificationPermissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission()
-        ) { }
+    val endOfDay = selectedDay + DAY_MILLIS
+    val dayEvents = events.filter { it.startAt < endOfDay && it.endAt > selectedDay }.sortedBy { it.startAt }
+    val dayTasks = tasks.filter { !it.completed && it.dueAt >= selectedDay && it.dueAt < endOfDay }.sortedBy { it.dueAt }
 
-    val now = System.currentTimeMillis()
-    val completedRetention = 24L * 60L * 60L * 1000L
-
-    val pending = tasks
-        .filterNot { it.completed }
-        .sortedWith(
-            compareBy<Task> {
-                when (it.priority) {
-                    Task.Priority.HIGH -> 0
-                    Task.Priority.MEDIUM -> 1
-                    Task.Priority.LOW -> 2
-                }
-            }.thenBy { it.dueAt }
-        )
-
-    val completed = tasks
-        .filter {
-            it.completed &&
-                it.completedAt != null &&
-                now - it.completedAt < completedRetention
+    val items = buildList {
+        dayEvents.forEach { event ->
+            add(TimelineItem(
+                time = event.startAt,
+                title = event.title,
+                subtitle = event.location.ifBlank { if (event.type == ScheduleEvent.Type.CLASS) "Class" else "Event" },
+                kind = if (event.type == ScheduleEvent.Type.CLASS) TimelineItem.Kind.CLASS else TimelineItem.Kind.EVENT,
+                eventId = event.id
+            ))
         }
-        .sortedWith(
-            compareByDescending<Task> { it.completedAt ?: 0L }
-        )
+        dayTasks.forEach { task ->
+            add(TimelineItem(
+                time = task.dueAt,
+                title = task.title,
+                subtitle = "Task • ${task.priority.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                kind = TimelineItem.Kind.TASK,
+                priority = task.priority
+            ))
+        }
+    }.sortedBy { it.time }
 
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    val weekDays = (-2..2).map { offset ->
+        Calendar.getInstance().apply {
+            timeInMillis = selectedDay
+            add(Calendar.DAY_OF_YEAR, offset)
+        }.timeInMillis
+    }
+
+    Box(Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    start = 24.dp,
-                    end = 24.dp,
-                    top = 72.dp,
-                    bottom = 110.dp
-                )
+            Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, top = 72.dp, bottom = 110.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = "Tasks",
+                        SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date(selectedDay)),
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 34.sp,
+                        fontSize = 30.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
+                    Spacer(Modifier.height(7.dp))
                     Text(
-                        text = if (pending.isEmpty()) {
-                            "Nothing waiting for you."
-                        } else {
-                            pending.size.toString() +
-                                if (pending.size == 1) {
-                                    " task to keep moving."
-                                } else {
-                                    " tasks to keep moving."
-                                }
+                        when (items.size) {
+                            0 -> "Nothing scheduled for this day."
+                            1 -> "1 thing on your schedule."
+                            else -> "${items.size} things on your schedule."
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 15.sp
                     )
                 }
-
                 Box(
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        )
-                        .clickable { showAddTask = true },
+                    Modifier.padding(top = 2.dp).size(44.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                        .clickable { showAdd = true },
                     contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.material3.Icon(
-                        imageVector = Icons.Outlined.Add,
-                        contentDescription = "Add task",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
+                ) { Icon(Icons.Outlined.Add, "Add to schedule", tint = MaterialTheme.colorScheme.primary) }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                weekDays.forEach { day ->
+                    val selected = isSameDay(day, selectedDay)
+                    val cal = Calendar.getInstance().apply { timeInMillis = day }
+                    Column(
+                        Modifier.width(54.dp).clip(RoundedCornerShape(18.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
+                            .clickable { selectedDay = startOfDay(day) }
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)).uppercase(),
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(cal.get(Calendar.DAY_OF_MONTH).toString(), color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                        if (isSameDay(day, today)) {
+                            Spacer(Modifier.height(4.dp))
+                            Box(Modifier.size(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
 
-            if (pending.isEmpty() && completed.isEmpty()) {
-                EmptyTaskState(
-                    onAddTask = { showAddTask = true }
-                )
+            if (isSameDay(selectedDay, today)) {
+                val nowText = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                    Spacer(Modifier.width(8.dp))
+                    Text("NOW • $nowText", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)))
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
+            if (items.isEmpty()) {
+                ScheduleEmptyState { showAdd = true }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (pending.isNotEmpty()) {
-                        item {
-                            SectionLabel(
-                                text = if (
-                                    pending.any {
-                                        it.dueAt < System.currentTimeMillis()
-                                    }
-                                ) {
-                                    "Needs attention"
-                                } else {
-                                    "Upcoming"
-                                }
-                            )
-                        }
-
-                        items(
-                            items = pending,
-                            key = { it.id }
-                        ) { task ->
-                            TaskRow(
-                                task = task,
-                                onToggle = {
-                                    ScrittoStore.setTaskCompleted(
-                                        context,
-                                        task.id,
-                                        true
-                                    )
-                                },
-                                onDelete = {
-                                    taskForDelete = task
-                                }
-                            )
-                        }
-                    }
-
-                    if (completed.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            SectionLabel(text = "Completed")
-                        }
-
-                        items(
-                            items = completed,
-                            key = { it.id }
-                        ) { task ->
-                            TaskRow(
-                                task = task,
-                                onToggle = {
-                                    ScrittoStore.setTaskCompleted(
-                                        context,
-                                        task.id,
-                                        false
-                                    )
-                                },
-                                onDelete = {
-                                    taskForDelete = task
-                                }
-                            )
+                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item { Text("TODAY'S FLOW", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp) }
+                    items(items, key = { "${it.kind}-${it.eventId ?: it.title}-${it.time}" }) { item ->
+                        TimelineRow(item) {
+                            item.eventId?.let { id -> events.firstOrNull { it.id == id }?.let { deleteEvent = it } }
                         }
                     }
                 }
             }
         }
 
-        if (showAddTask) {
-            AddTaskPanel(
+        if (showAdd) {
+            AddSchedulePanel(
                 context = context,
-                onDismiss = { showAddTask = false },
+                initialDate = selectedDay,
+                onDismiss = { showAdd = false },
                 onCreated = {
-                    showAddTask = false
-
-                    if (
-                        android.os.Build.VERSION.SDK_INT >= 33 &&
-                        context.checkSelfPermission(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationPermissionLauncher.launch(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        )
-                    }
+                    showAdd = false
+                    if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             )
         }
 
-        taskForDelete?.let { task ->
-            DeleteTaskDialog(
-                task = task,
-                onDismiss = { taskForDelete = null },
-                onConfirm = {
-                    ScrittoStore.deleteTask(context, task.id)
-                    taskForDelete = null
-                }
+        deleteEvent?.let { event ->
+            AlertDialog(
+                onDismissRequest = { deleteEvent = null },
+                title = { Text("Remove ${if (event.type == ScheduleEvent.Type.CLASS) "class" else "event"}?") },
+                text = { Text("“${event.title}” will be removed from your schedule.") },
+                confirmButton = {
+                    TextButton(onClick = { ScrittoStore.deleteScheduleEvent(context, event.id); deleteEvent = null }) {
+                        Text("Remove", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = { TextButton(onClick = { deleteEvent = null }) { Text("Cancel") } }
             )
         }
     }
 }
 
 @Composable
-private fun AddTaskPanel(
-    context: Context,
-    onDismiss: () -> Unit,
-    onCreated: () -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var selectedDate by remember { mutableStateOf(startOfTodayMillis()) }
-    var selectedHour by remember { mutableStateOf<Int?>(null) }
-    var selectedMinute by remember { mutableStateOf<Int?>(null) }
-    var priority by remember { mutableStateOf(Task.Priority.MEDIUM) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
+private fun TimelineRow(item: TimelineItem, onDelete: () -> Unit) {
+    val accent = when (item.kind) {
+        TimelineItem.Kind.CLASS -> MaterialTheme.colorScheme.primary
+        TimelineItem.Kind.EVENT -> MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+        TimelineItem.Kind.TASK -> when (item.priority) {
+            Task.Priority.HIGH -> Color(0xFFE56B62)
+            Task.Priority.MEDIUM -> MaterialTheme.colorScheme.primary
+            Task.Priority.LOW -> MaterialTheme.colorScheme.onSurfaceVariant
+            null -> MaterialTheme.colorScheme.primary
+        }
+    }
+    val icon = when (item.kind) {
+        TimelineItem.Kind.CLASS -> Icons.Outlined.Book
+        TimelineItem.Kind.EVENT -> Icons.Outlined.Event
+        TimelineItem.Kind.TASK -> Icons.Outlined.CheckCircle
+    }
 
-    val canCreate =
-        title.isNotBlank() &&
-            selectedDate != null &&
-            selectedHour != null &&
-            selectedMinute != null
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                MaterialTheme.colorScheme.background.copy(alpha = 0.78f)
-            )
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.BottomCenter
-    ) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Column(Modifier.width(58.dp)) {
+            Text(SimpleDateFormat("h:mm", Locale.getDefault()).format(Date(item.time)), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            Text(SimpleDateFormat("a", Locale.getDefault()).format(Date(item.time)).uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        Box(Modifier.padding(top = 2.dp).size(8.dp).clip(CircleShape).background(accent))
+        Spacer(Modifier.width(10.dp))
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(
-                    start = 20.dp,
-                    end = 20.dp,
-                    bottom = 92.dp
-                )
-                .clip(RoundedCornerShape(28.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .clickable(enabled = false) {}
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+            Modifier.weight(1f).shadow(8.dp, RoundedCornerShape(20.dp), clip = false, ambientColor = accent.copy(alpha = 0.16f), spotColor = accent.copy(alpha = 0.12f))
+                .clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)).padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(9.dp))
+                Text(item.title, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                if (item.eventId != null) Icon(Icons.Outlined.Close, "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).clickable(onClick = onDelete))
+            }
+            Spacer(Modifier.height(7.dp))
+            Text(item.subtitle, color = if (item.kind == TimelineItem.Kind.TASK && item.priority == Task.Priority.HIGH) Color(0xFFE6A23C) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun ScheduleEmptyState(onAdd: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Outlined.Schedule, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), modifier = Modifier.size(42.dp))
+        Spacer(Modifier.height(14.dp))
+        Text("Your day is clear", color = MaterialTheme.colorScheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        Text("Add an event or class to shape the day.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+        Spacer(Modifier.height(16.dp))
+        Text("Add to schedule", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onAdd))
+    }
+}
+
+@Composable
+private fun AddSchedulePanel(context: Context, initialDate: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(initialDate) }
+    var startHour by remember { mutableStateOf<Int?>(null) }
+    var startMinute by remember { mutableStateOf<Int?>(null) }
+    var endHour by remember { mutableStateOf<Int?>(null) }
+    var endMinute by remember { mutableStateOf<Int?>(null) }
+    var type by remember { mutableStateOf(ScheduleEvent.Type.EVENT) }
+    var repeatWeekly by remember { mutableStateOf(false) }
+    var datePicker by remember { mutableStateOf(false) }
+    var startPicker by remember { mutableStateOf(false) }
+    var endPicker by remember { mutableStateOf(false) }
+
+    val canCreate = title.isNotBlank() && startHour != null && startMinute != null && endHour != null && endMinute != null
+
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.78f)).clickable { onDismiss() }, contentAlignment = Alignment.BottomCenter) {
+        Column(
+            Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 92.dp)
+                .clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surface).clickable(enabled = false) {}.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "New task",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Add to schedule", color = MaterialTheme.colorScheme.onSurface, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Outlined.Close, "Close", modifier = Modifier.size(22.dp).clickable(onClick = onDismiss))
+            }
+            OutlinedTextField(title, { title = it }, placeholder = { Text("What is happening?") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(location, { location = it }, placeholder = { Text("Room or location (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), leadingIcon = { Icon(Icons.Outlined.LocationOn, null) })
 
-            TaskInput(
-                value = title,
-                onValueChange = { title = it },
-                hint = "What needs to get done?"
-            )
-
-            TaskInput(
-                value = description,
-                onValueChange = { description = it },
-                hint = "Add a note (optional)"
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                DateTimeButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.CalendarToday,
-                    text = selectedDate?.let(::formatDate) ?: "Due date",
-                    selected = true,
-                    onClick = { showDatePicker = true }
-                )
-
-                DateTimeButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Schedule,
-                    text = if (
-                        selectedHour != null &&
-                        selectedMinute != null
-                    ) {
-                        formatTime(selectedHour!!, selectedMinute!!)
-                    } else {
-                        "Due time"
-                    },
-                    selected = selectedHour != null,
-                    onClick = { showTimePicker = true }
-                )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ScheduleChoice("Event", type == ScheduleEvent.Type.EVENT, Modifier.weight(1f)) { type = ScheduleEvent.Type.EVENT }
+                ScheduleChoice("Class", type == ScheduleEvent.Type.CLASS, Modifier.weight(1f)) { type = ScheduleEvent.Type.CLASS }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ScheduleChoice(formatScheduleDate(date), true, Modifier.weight(1f)) { datePicker = true }
+                ScheduleChoice(if (startHour != null) formatTime(startHour!!, startMinute!!) else "Start time", startHour != null, Modifier.weight(1f)) { startPicker = true }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ScheduleChoice(if (endHour != null) formatTime(endHour!!, endMinute!!) else "End time", endHour != null, Modifier.weight(1f)) { endPicker = true }
+                ScheduleChoice("15 min reminder", true, Modifier.weight(1f)) {}
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                PriorityChip(
-                    label = "Low",
-                    selected = priority == Task.Priority.LOW,
-                    onClick = { priority = Task.Priority.LOW }
-                )
-                PriorityChip(
-                    label = "Medium",
-                    selected = priority == Task.Priority.MEDIUM,
-                    onClick = { priority = Task.Priority.MEDIUM }
-                )
-                PriorityChip(
-                    label = "High",
-                    selected = priority == Task.Priority.HIGH,
-                    onClick = { priority = Task.Priority.HIGH }
-                )
+            if (type == ScheduleEvent.Type.CLASS) {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                        .clickable { repeatWeekly = !repeatWeekly }.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(if (repeatWeekly) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Repeat weekly", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                }
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    )
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                androidx.compose.material3.Icon(
-                    imageVector = Icons.Outlined.Alarm,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-
-                Spacer(modifier = Modifier.size(10.dp))
-
-                Text(
-                    text = "A notification will be sent when this task is due.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Alarm, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(9.dp))
+                Text("A reminder will be sent 15 minutes before.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
 
             Button(
                 onClick = {
-                    val dueAt = buildDueTime(
-                        selectedDate!!,
-                        selectedHour!!,
-                        selectedMinute!!
-                    )
-
-                    ScrittoStore.createTask(
-                        context = context,
-                        title = title,
-                        description = description,
-                        dueAt = dueAt,
-                        priority = priority
-                    )
-
+                    val start = buildDateTime(date, startHour!!, startMinute!!)
+                    val endBase = buildDateTime(date, endHour!!, endMinute!!)
+                    val end = if (endBase <= start) endBase + DAY_MILLIS else endBase
+                    val count = if (type == ScheduleEvent.Type.CLASS && repeatWeekly) 8 else 1
+                    repeat(count) { index ->
+                        val offset = index * 7L * DAY_MILLIS
+                        ScrittoStore.createScheduleEvent(context, title, location, start + offset, end + offset, type, 15)
+                    }
                     onCreated()
                 },
                 enabled = canCreate,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.background
-                )
-            ) {
-                Text(
-                    text = "Create task",
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+                shape = RoundedCornerShape(16.dp)
+            ) { Text(if (repeatWeekly) "Add class series" else "Add to schedule", fontWeight = FontWeight.SemiBold) }
         }
     }
 
-    if (showDatePicker) {
-        val datePickerState =
-            androidx.compose.material3.rememberDatePickerState(
-                initialSelectedDateMillis =
-                    selectedDate
-            )
-
+    if (datePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = date)
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { selectedDate = it }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("Done")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDatePicker = false }
-                ) {
-                    Text("Cancel")
-                }
-            }
-        ) {
-            DatePicker(
-                state = datePickerState,
-                showModeToggle = false
-            )
-        }
+            onDismissRequest = { datePicker = false },
+            confirmButton = { TextButton(onClick = { state.selectedDateMillis?.let { date = startOfDay(it) }; datePicker = false }) { Text("Done") } },
+            dismissButton = { TextButton(onClick = { datePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = state, showModeToggle = false) }
     }
 
-    if (showTimePicker) {
+    LaunchedEffect(startPicker) {
+        if (!startPicker) return@LaunchedEffect
         val now = Calendar.getInstance()
+        TimePickerDialog(context, { _, h, m -> startHour = h; startMinute = m; startPicker = false }, startHour ?: now.get(Calendar.HOUR_OF_DAY), startMinute ?: now.get(Calendar.MINUTE), false).show()
+    }
 
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    selectedHour = hour
-                    selectedMinute = minute
-                    showTimePicker = false
-                },
-                selectedHour ?: now.get(Calendar.HOUR_OF_DAY),
-                selectedMinute ?: now.get(Calendar.MINUTE),
-                false
-            ).show()
-        }
-        showTimePicker = false
+    LaunchedEffect(endPicker) {
+        if (!endPicker) return@LaunchedEffect
+        val now = Calendar.getInstance()
+        TimePickerDialog(context, { _, h, m -> endHour = h; endMinute = m; endPicker = false }, endHour ?: ((startHour ?: now.get(Calendar.HOUR_OF_DAY)) + 1).coerceAtMost(23), endMinute ?: (startMinute ?: now.get(Calendar.MINUTE)), false).show()
     }
 }
 
 @Composable
-private fun TaskInput(
-    value: String,
-    onValueChange: (String) -> Unit,
-    hint: String
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = {
-            Text(
-                text = hint,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        singleLine = hint.contains("What"),
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
-    )
-}
-
-@Composable
-private fun DateTimeButton(
-    modifier: Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
+private fun ScheduleChoice(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                MaterialTheme.colorScheme.onSurface.copy(
-                    alpha = if (selected) 0.08f else 0.05f
-                )
-            )
-            .clickable(onClick = onClick)
-            .padding(12.dp),
+        modifier.clip(RoundedCornerShape(16.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        androidx.compose.material3.Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.size(18.dp)
-        )
-
-        Spacer(modifier = Modifier.size(8.dp))
-
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 13.sp,
-            maxLines = 1
-        )
+        Text(text, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
 
-@Composable
-private fun PriorityChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val background by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-        } else {
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
-        },
-        animationSpec = tween(180),
-        label = "priority_background"
-    )
+private fun startOfDay(timestamp: Long): Long = Calendar.getInstance().apply {
+    timeInMillis = timestamp
+    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+}.timeInMillis
 
-    Text(
-        text = label,
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        fontSize = 12.sp,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(background)
-            .clickable(onClick = onClick)
-            .padding(
-                horizontal = 14.dp,
-                vertical = 9.dp
-            )
-    )
-}
+private fun buildDateTime(date: Long, hour: Int, minute: Int): Long = Calendar.getInstance().apply {
+    timeInMillis = date
+    set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+}.timeInMillis
 
-@Composable
-private fun TaskRow(
-    task: Task,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val completedAlpha by animateFloatAsState(
-        targetValue = if (task.completed) 0.58f else 1f,
-        animationSpec = tween(
-            durationMillis = 220,
-            easing = FastOutSlowInEasing
-        ),
-        label = "task_alpha"
-    )
+private fun formatTime(hour: Int, minute: Int): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute) }.time)
 
-    val overdue =
-        !task.completed && task.dueAt < System.currentTimeMillis()
-
-    val glowColor = when {
-        overdue -> androidx.compose.ui.graphics.Color(0xFFFF4D4D)
-        task.completed -> androidx.compose.ui.graphics.Color(0xFF8DFF9A)
-        else -> androidx.compose.ui.graphics.Color(0xFFFFB12B)
-    }
-
-    val glowElevation = when {
-        overdue -> 24.dp
-        task.completed -> 18.dp
-        else -> 18.dp
-    }
-
-    val taskShape = RoundedCornerShape(20.dp)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = glowElevation,
-                shape = taskShape,
-                clip = false,
-                ambientColor = glowColor.copy(
-                    alpha = if (overdue) 0.82f else 0.62f
-                ),
-                spotColor = glowColor.copy(
-                    alpha = if (overdue) 0.70f else 0.48f
-                )
-            )
-            .clip(taskShape)
-            .background(
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
-            )
-            .clickable(onClick = onToggle)
-            .padding(16.dp)
-            .graphicsLayer {
-                alpha = completedAlpha
-            }
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (task.completed) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(
-                                alpha = 0.08f
-                            )
-                        }
-                    )
-                    .clickable(onClick = onToggle),
-                contentAlignment = Alignment.Center
-            ) {
-                if (task.completed) {
-                    androidx.compose.material3.Icon(
-                        imageVector = Icons.Outlined.Check,
-                        contentDescription = "Completed",
-                        tint = MaterialTheme.colorScheme.background,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.size(12.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = task.title,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
-                )
-
-                if (task.description.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = task.description,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp,
-                        maxLines = 1
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(7.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = task.priority.name.lowercase().replaceFirstChar {
-                            it.uppercase()
-                        },
-                        color = when (task.priority) {
-                            Task.Priority.HIGH -> MaterialTheme.colorScheme.primary
-                            Task.Priority.MEDIUM -> MaterialTheme.colorScheme.onSurfaceVariant
-                            Task.Priority.LOW -> MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = 0.70f
-                            )
-                        },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Text(
-                        text = "•",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                            alpha = 0.55f
-                        ),
-                        fontSize = 11.sp
-                    )
-
-                    Text(
-                        text = dueLabel(task.dueAt),
-                        color = if (overdue) {
-                            androidx.compose.ui.graphics.Color(0xFFFF5A5A)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontSize = 12.sp,
-                        fontWeight = if (overdue) {
-                            FontWeight.SemiBold
-                        } else {
-                            FontWeight.Normal
-                        },
-                        maxLines = 1
-                    )
-                }
-
-                if (!task.completed) {
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = "• reminder on",
-                        color = MaterialTheme.colorScheme.primary.copy(
-                            alpha = 0.72f
-                        ),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Text(
-                text = "•••",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 16.sp,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onDelete)
-                    .padding(8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text.uppercase(Locale.getDefault()),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 1.2.sp
-    )
-}
-
-@Composable
-private fun EmptyTaskState(
-    onAddTask: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "✓",
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.78f),
-            fontSize = 42.sp
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Nothing on your list",
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "Create a task and Scritto will remind you when it is due.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 14.sp
-        )
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Text(
-            text = "Add your first task",
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .clickable(onClick = onAddTask)
-                .padding(
-                    horizontal = 16.dp,
-                    vertical = 11.dp
-                )
-        )
-    }
-}
-
-@Composable
-private fun DeleteTaskDialog(
-    task: Task,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("Delete task?")
-        },
-        text = {
-            Text(
-                "“" + task.title +
-                    "” will be removed from Scritto."
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    text = "Delete",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-private fun buildDueTime(
-    dateMillis: Long,
-    hour: Int,
-    minute: Int
-): Long {
-    return Calendar.getInstance().apply {
-        timeInMillis = dateMillis
-        set(Calendar.HOUR_OF_DAY, hour)
-        set(Calendar.MINUTE, minute)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-}
-
-private fun formatDate(timestamp: Long): String {
-    return SimpleDateFormat(
-        "EEE, d MMM",
-        Locale.getDefault()
-    ).format(Date(timestamp))
-}
-
-private fun formatTime(hour: Int, minute: Int): String {
-    val calendar = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, hour)
-        set(Calendar.MINUTE, minute)
-    }
-
-    return SimpleDateFormat(
-        "h:mm a",
-        Locale.getDefault()
-    ).format(calendar.time)
-}
-
-private fun dueLabel(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-
-    return when {
-        timestamp < now -> {
-            "Overdue • " +
-                formatDate(timestamp) +
-                " " +
-                formatTimeFromTimestamp(timestamp)
-        }
-
-        isSameDay(timestamp, now) -> {
-            "Today • " + formatTimeFromTimestamp(timestamp)
-        }
-
-        isSameDay(
-            timestamp,
-            now + 24 * 60 * 60 * 1000L
-        ) -> {
-            "Tomorrow • " + formatTimeFromTimestamp(timestamp)
-        }
-
-        else -> {
-            formatDate(timestamp) +
-                " • " +
-                formatTimeFromTimestamp(timestamp)
-        }
-    }
-}
-
-private fun formatTimeFromTimestamp(timestamp: Long): String {
-    return SimpleDateFormat(
-        "h:mm a",
-        Locale.getDefault()
-    ).format(Date(timestamp))
-}
+private fun formatScheduleDate(timestamp: Long): String = SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date(timestamp))
 
 private fun isSameDay(first: Long, second: Long): Boolean {
     val a = Calendar.getInstance().apply { timeInMillis = first }
     val b = Calendar.getInstance().apply { timeInMillis = second }
-
-    return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
-        a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
-}
-
-
-private fun startOfTodayMillis(): Long {
-    return Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
+    return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
 }
