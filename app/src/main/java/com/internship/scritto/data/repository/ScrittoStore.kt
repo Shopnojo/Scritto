@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.compose.runtime.mutableStateListOf
 import com.internship.scritto.data.model.Note
 import com.internship.scritto.data.model.NoteSpan
+import com.internship.scritto.data.model.ScheduleEvent
 import com.internship.scritto.data.model.Task
+import com.internship.scritto.notifications.EventReminderScheduler
 import com.internship.scritto.notifications.TaskReminderScheduler
 import org.json.JSONArray
 import org.json.JSONObject
@@ -15,6 +17,7 @@ object ScrittoStore {
     private const val PREFS_NAME = "scritto_store"
     private const val NOTES_KEY = "notes"
     private const val TASKS_KEY = "tasks"
+    private const val EVENTS_KEY = "schedule_events"
     private const val AI_CONVERSATIONS_KEY = "ai_conversations"
     private const val FILES_KEY = "imported_files"
 
@@ -43,6 +46,10 @@ object ScrittoStore {
     val tasks: List<Task>
         get() = _tasks
 
+    private val _events = mutableStateListOf<ScheduleEvent>()
+    val events: List<ScheduleEvent>
+        get() = _events
+
     private val _importedFiles = mutableStateListOf<ImportedFile>()
     val importedFiles: List<ImportedFile>
         get() = _importedFiles
@@ -63,6 +70,9 @@ object ScrittoStore {
 
         _tasks.clear()
         _tasks.addAll(loadTasks())
+
+        _events.clear()
+        _events.addAll(loadEvents())
 
         _importedFiles.clear()
         _importedFiles.addAll(loadImportedFiles())
@@ -261,6 +271,91 @@ object ScrittoStore {
                                 System.currentTimeMillis()
                             ),
                             completedAt = item.optLong("completedAt", 0L).takeIf { it > 0L }
+                        )
+                    )
+                }
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    fun createScheduleEvent(
+        context: Context,
+        title: String,
+        location: String,
+        startAt: Long,
+        endAt: Long,
+        type: ScheduleEvent.Type,
+        reminderMinutes: Int = 15
+    ): ScheduleEvent {
+        checkInitialized()
+
+        val event = ScheduleEvent(
+            id = UUID.randomUUID().toString(),
+            title = title.trim(),
+            location = location.trim(),
+            startAt = startAt,
+            endAt = endAt,
+            type = type,
+            reminderMinutes = reminderMinutes
+        )
+
+        _events.add(event)
+        persistEvents()
+        EventReminderScheduler.schedule(context.applicationContext, event)
+        return event
+    }
+
+    fun deleteScheduleEvent(context: Context, id: String) {
+        checkInitialized()
+        EventReminderScheduler.cancel(context.applicationContext, id)
+        _events.removeAll { it.id == id }
+        persistEvents()
+    }
+
+    fun getScheduleEventsForDay(startOfDay: Long, endOfDay: Long): List<ScheduleEvent> =
+        _events.filter { it.startAt < endOfDay && it.endAt > startOfDay }
+
+    private fun persistEvents() {
+        preferences?.edit()?.putString(
+            EVENTS_KEY,
+            JSONArray().apply {
+                _events.forEach { event ->
+                    put(JSONObject().apply {
+                        put("id", event.id)
+                        put("title", event.title)
+                        put("location", event.location)
+                        put("startAt", event.startAt)
+                        put("endAt", event.endAt)
+                        put("type", event.type.name)
+                        put("reminderMinutes", event.reminderMinutes)
+                        put("createdAt", event.createdAt)
+                    })
+                }
+            }.toString()
+        )?.apply()
+    }
+
+    private fun loadEvents(): List<ScheduleEvent> {
+        val raw = preferences?.getString(EVENTS_KEY, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    add(
+                        ScheduleEvent(
+                            id = item.getString("id"),
+                            title = item.optString("title"),
+                            location = item.optString("location"),
+                            startAt = item.optLong("startAt"),
+                            endAt = item.optLong("endAt"),
+                            type = runCatching {
+                                ScheduleEvent.Type.valueOf(
+                                    item.optString("type", ScheduleEvent.Type.EVENT.name)
+                                )
+                            }.getOrDefault(ScheduleEvent.Type.EVENT),
+                            reminderMinutes = item.optInt("reminderMinutes", 15),
+                            createdAt = item.optLong("createdAt", System.currentTimeMillis())
                         )
                     )
                 }
