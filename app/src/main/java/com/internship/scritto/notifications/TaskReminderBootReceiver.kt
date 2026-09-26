@@ -22,5 +22,9 @@ class TaskReminderBootReceiver : BroadcastReceiver() {
             .forEach { task ->
                 TaskReminderScheduler.schedule(context, task)
             }
+
+        ScrittoStore.events.forEach { event ->
+            EventReminderScheduler.schedule(context, event)
+        }
     }
 }
