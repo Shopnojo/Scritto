@@ -53,10 +53,12 @@ import com.internship.scritto.screens.NoteEditorScreen
 import com.internship.scritto.screens.FilesScreen
 import com.internship.scritto.screens.NotesScreen
 import com.internship.scritto.screens.ScheduleScreen
+import com.internship.scritto.screens.TaskScreen
 import com.internship.scritto.ui.splash.ScrittoSplashScreen
 
 private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
+private const val TASK_ROUTE = "tasks"
 private const val SCHEDULE_ROUTE = "schedule"
 private const val AI_ROUTE = "ai"
 private const val FILES_ROUTE = "files"
@@ -161,7 +163,7 @@ fun ScrittoNavigation() {
                     onTasks = {
                         createMenuExpanded = false
                         selectedDockIndex = 2
-                        navController.navigate(SCHEDULE_ROUTE) {
+                        navController.navigate(TASK_ROUTE) {
                             launchSingleTop = true
                         }
                     }
@@ -178,6 +180,10 @@ fun ScrittoNavigation() {
                         navController.navigate("note/$noteId")
                     }
                 )
+            }
+
+            composable(TASK_ROUTE) {
+                TaskScreen()
             }
 
             composable(SCHEDULE_ROUTE) {
@@ -336,7 +342,8 @@ fun ScrittoNavigation() {
                                             }
                                             "New Task" -> {
                                                 createMenuExpanded = false
-                                                navController.navigate(SCHEDULE_ROUTE) {
+                                                selectedDockIndex = 2
+                                                navController.navigate(TASK_ROUTE) {
                                                     launchSingleTop = true
                                                 }
                                             }
@@ -393,7 +400,7 @@ fun ScrittoNavigation() {
 
                             2 -> {
                                 createMenuExpanded = false
-                                navController.navigate(SCHEDULE_ROUTE) {
+                                navController.navigate(TASK_ROUTE) {
                                     launchSingleTop = true
                                 }
                             }
