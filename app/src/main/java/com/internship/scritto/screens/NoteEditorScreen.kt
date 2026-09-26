@@ -1,6 +1,7 @@
 package com.internship.scritto.screens
 
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -36,8 +37,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FormatAlignCenter
+import androidx.compose.material.icons.automirrored.outlined.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.outlined.FormatAlignRight
+import androidx.compose.material.icons.outlined.FormatClear
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,12 +55,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -66,8 +71,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.internship.scritto.data.model.NoteSpan
 import com.internship.scritto.data.repository.ScrittoStore
+import com.internship.scritto.notes.NoteRichText
 import com.internship.scritto.ui.theme.ScrittoAmber
 import com.internship.scritto.ui.theme.ScrittoBackground
 import com.internship.scritto.ui.theme.ScrittoBackgroundElevated
@@ -112,7 +117,7 @@ fun NoteEditorScreen(
 
     var content by remember(noteId) {
         mutableStateOf(
-            textFieldValueFromNote(note)
+            NoteRichText.valueFrom(note.content, note.spans)
         )
     }
 
@@ -125,6 +130,12 @@ fun NoteEditorScreen(
     // always applied to the text the user selected.
     var savedSelection by remember(noteId) {
         mutableStateOf<TextRange?>(null)
+    }
+
+    // Style armed with the caret only (e.g. tap Bold, then type). It is applied
+    // to the next characters typed and dropped as soon as the caret moves.
+    var pendingStyle by remember(noteId) {
+        mutableStateOf<Int?>(null)
     }
 
     var isFocused by remember(noteId) {
@@ -158,30 +169,79 @@ fun NoteEditorScreen(
     // AUTOSAVE
     // --------------------------------------------------------------------
 
-    LaunchedEffect(title, content, textAlign) {
-        saveState = SaveState.SAVING
+    /** True when what is on screen differs from what is stored. */
+    fun hasUnsavedChanges(): Boolean {
+        val stored = ScrittoStore.getNote(noteId) ?: return false
 
-        delay(350)
+        return stored.title != title ||
+            stored.content != content.text ||
+            stored.textAlign != textAlignToStorage(textAlign) ||
+            stored.spans != NoteRichText.toSpans(content.annotatedString)
+    }
+
+    fun saveNow() {
+        if (!hasUnsavedChanges()) return
 
         ScrittoStore.updateNote(
             id = noteId,
             title = title,
             content = content.text,
-            spans = noteSpansFromAnnotatedString(
-                content.annotatedString
-            ),
+            spans = NoteRichText.toSpans(content.annotatedString),
             textAlign = textAlignToStorage(textAlign)
         )
+    }
+
+    LaunchedEffect(title, content, textAlign) {
+        // Caret moves and the initial composition change nothing worth saving.
+        if (!hasUnsavedChanges()) {
+            saveState = SaveState.SAVED
+            return@LaunchedEffect
+        }
+
+        saveState = SaveState.SAVING
+
+        delay(350)
+
+        saveNow()
 
         saveState = SaveState.SAVED
+    }
+
+    // The debounce above is cancelled when the screen is left, so flush
+    // whatever is pending. This also covers rotation and process teardown.
+    DisposableEffect(noteId) {
+        onDispose {
+            saveNow()
+        }
+    }
+
+    // Leaving the editor: save, and tidy away a note that was never written in.
+    fun leave() {
+        saveNow()
+
+        if (title.isBlank() && content.text.isBlank()) {
+            ScrittoStore.deleteNote(noteId)
+        }
+
+        onBack()
+    }
+
+    BackHandler {
+        leave()
     }
 
     // --------------------------------------------------------------------
     // CARET / CONTENT SCROLL
     // --------------------------------------------------------------------
 
-    LaunchedEffect(content.text, content.selection) {
-        if (isFocused) {
+    // Follow the caret only while typing at the end of the note. Tapping or
+    // dragging a selection elsewhere must not yank the page to the bottom.
+    LaunchedEffect(content.text) {
+        if (
+            isFocused &&
+            content.selection.collapsed &&
+            content.selection.end == content.text.length
+        ) {
             delay(40)
 
             contentScrollState.animateScrollTo(
@@ -223,7 +283,7 @@ fun NoteEditorScreen(
                             HapticFeedbackConstants.KEYBOARD_TAP
                         )
 
-                        onBack()
+                        leave()
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -381,32 +441,25 @@ fun NoteEditorScreen(
 
             BasicTextField(
                 value = content,
-                onValueChange = {
-                    // BasicTextField can emit a plain TextFieldValue when the
-                    // editor regains/loses focus around a toolbar tap. If the
-                    // text itself has not changed, never let that plain value
-                    // erase the AnnotatedString spans we just applied.
-                    val updatedValue = if (
-                        it.text == content.text &&
-                        it.annotatedString.spanStyles.isEmpty() &&
-                        content.annotatedString.spanStyles.isNotEmpty()
-                    ) {
-                        content.copy(
-                            selection = it.selection,
-                            composition = it.composition
-                        )
-                    } else {
-                        it
-                    }
+                onValueChange = { emitted ->
+                    // The text field hands back plain text (no spans) after any
+                    // edit. Re-map the existing styles onto the new text so
+                    // formatting stays put while typing, deleting or pasting.
+                    val reconciled = NoteRichText.reconcile(
+                        old = content,
+                        new = emitted,
+                        pending = pendingStyle
+                    )
 
-                    content = updatedValue
+                    content = reconciled.value
+                    pendingStyle = reconciled.pending
 
                     // Selection changes are delivered through TextFieldValue.
                     // Remember non-collapsed selections for toolbar actions.
-                    if (!updatedValue.selection.collapsed) {
-                        savedSelection = updatedValue.selection
+                    if (!reconciled.value.selection.collapsed) {
+                        savedSelection = reconciled.value.selection
                     } else if (isFocused) {
-                        savedSelection = updatedValue.selection
+                        savedSelection = reconciled.value.selection
                     }
                 },
                 modifier = Modifier
@@ -486,9 +539,11 @@ fun NoteEditorScreen(
             FormattingToolbar(
                 value = content,
                 savedSelection = savedSelection,
+                pendingStyle = pendingStyle,
                 textAlign = textAlign,
-                onValueChanged = { updatedValue ->
+                onValueChanged = { updatedValue, pending ->
                     content = updatedValue
+                    pendingStyle = pending
                     savedSelection = updatedValue.selection
                 },
                 onTextAlignChanged = {
@@ -500,83 +555,8 @@ fun NoteEditorScreen(
 }
 
 // ========================================================================
-// RICH TEXT PERSISTENCE
+// ALIGNMENT STORAGE
 // ========================================================================
-
-private fun textFieldValueFromNote(
-    note: com.internship.scritto.data.model.Note
-): TextFieldValue {
-    val builder = AnnotatedString.Builder(note.content)
-
-    note.spans.forEach { span ->
-        val start = span.start.coerceIn(0, note.content.length)
-        val end = span.end.coerceIn(start, note.content.length)
-
-        if (start >= end) return@forEach
-
-        builder.addStyle(
-            SpanStyle(
-                fontWeight = if (span.bold) {
-                    FontWeight.Bold
-                } else {
-                    null
-                },
-                fontStyle = if (span.italic) {
-                    FontStyle.Italic
-                } else {
-                    null
-                },
-                textDecoration = when {
-                    span.underline && span.strike -> {
-                        TextDecoration.combine(
-                            listOf(
-                                TextDecoration.Underline,
-                                TextDecoration.LineThrough
-                            )
-                        )
-                    }
-
-                    span.underline -> TextDecoration.Underline
-                    span.strike -> TextDecoration.LineThrough
-                    else -> null
-                }
-            ),
-            start,
-            end
-        )
-    }
-
-    return TextFieldValue(
-        annotatedString = builder.toAnnotatedString(),
-        selection = TextRange(note.content.length)
-    )
-}
-
-private fun noteSpansFromAnnotatedString(
-    value: AnnotatedString
-): List<NoteSpan> {
-    return value.spanStyles.mapNotNull { range ->
-        val bold = range.item.fontWeight == FontWeight.Bold
-        val italic = range.item.fontStyle == FontStyle.Italic
-        val decoration = range.item.textDecoration
-
-        val underline = decoration?.contains(TextDecoration.Underline) == true
-        val strike = decoration?.contains(TextDecoration.LineThrough) == true
-
-        if (!bold && !italic && !underline && !strike) {
-            null
-        } else {
-            NoteSpan(
-                start = range.start,
-                end = range.end,
-                bold = bold,
-                italic = italic,
-                underline = underline,
-                strike = strike
-            )
-        }
-    }
-}
 
 private fun textAlignToStorage(
     alignment: TextAlign
@@ -615,8 +595,9 @@ private enum class SaveState {
 private fun FormattingToolbar(
     value: TextFieldValue,
     savedSelection: TextRange?,
+    pendingStyle: Int?,
     textAlign: TextAlign,
-    onValueChanged: (TextFieldValue) -> Unit,
+    onValueChanged: (TextFieldValue, Int?) -> Unit,
     onTextAlignChanged: (TextAlign) -> Unit
 ) {
     val view = LocalView.current
@@ -624,11 +605,35 @@ private fun FormattingToolbar(
 
     // Restore the last editor selection before every formatting operation.
     val formattingValue = remember(value, savedSelection) {
-        val selection = savedSelection ?: value.selection
+        val length = value.text.length
+        val selection = savedSelection?.let {
+            TextRange(
+                it.start.coerceIn(0, length),
+                it.end.coerceIn(0, length)
+            )
+        } ?: value.selection
 
         value.copy(
             selection = selection
         )
+    }
+
+    fun tap() {
+        view.performHapticFeedback(
+            HapticFeedbackConstants.KEYBOARD_TAP
+        )
+    }
+
+    fun applyStyle(style: Int) {
+        tap()
+
+        val result = NoteRichText.toggle(
+            formattingValue,
+            style,
+            pendingStyle
+        )
+
+        onValueChanged(result.value, result.pending)
     }
 
     Row(
@@ -661,64 +666,48 @@ private fun FormattingToolbar(
         // BOLD
         FormattingButton(
             text = "B",
-            selected = hasBold(formattingValue),
-            onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
-
-                onValueChanged(
-                    toggleBold(formattingValue)
-                )
-            }
+            selected = NoteRichText.isActive(
+                formattingValue,
+                NoteRichText.BOLD,
+                pendingStyle
+            ),
+            onClick = { applyStyle(NoteRichText.BOLD) }
         )
 
         // ITALIC
         FormattingButton(
             text = "I",
-            selected = hasItalic(formattingValue),
+            selected = NoteRichText.isActive(
+                formattingValue,
+                NoteRichText.ITALIC,
+                pendingStyle
+            ),
             italic = true,
-            onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
-
-                onValueChanged(
-                    toggleItalic(formattingValue)
-                )
-            }
+            onClick = { applyStyle(NoteRichText.ITALIC) }
         )
 
         // UNDERLINE
         FormattingButton(
             text = "U",
-            selected = hasUnderline(formattingValue),
+            selected = NoteRichText.isActive(
+                formattingValue,
+                NoteRichText.UNDERLINE,
+                pendingStyle
+            ),
             underline = true,
-            onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
-
-                onValueChanged(
-                    toggleUnderline(formattingValue)
-                )
-            }
+            onClick = { applyStyle(NoteRichText.UNDERLINE) }
         )
 
         // STRIKETHROUGH
         FormattingButton(
             text = "S",
-            selected = hasStrike(formattingValue),
+            selected = NoteRichText.isActive(
+                formattingValue,
+                NoteRichText.STRIKE,
+                pendingStyle
+            ),
             strike = true,
-            onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
-
-                onValueChanged(
-                    toggleStrike(formattingValue)
-                )
-            }
+            onClick = { applyStyle(NoteRichText.STRIKE) }
         )
 
         ToolbarDivider()
@@ -727,12 +716,11 @@ private fun FormattingToolbar(
         FormattingButton(
             text = "•",
             onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
+                tap()
 
                 onValueChanged(
-                    insertBullet(formattingValue)
+                    NoteRichText.toggleBullet(formattingValue),
+                    null
                 )
             }
         )
@@ -741,12 +729,11 @@ private fun FormattingToolbar(
 
         // LEFT
         FormattingButton(
-            text = "≡",
+            icon = Icons.AutoMirrored.Outlined.FormatAlignLeft,
+            description = "Align left",
             selected = textAlign == TextAlign.Left,
             onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
+                tap()
 
                 onTextAlignChanged(
                     TextAlign.Left
@@ -756,12 +743,11 @@ private fun FormattingToolbar(
 
         // CENTER
         FormattingButton(
-            text = "≡",
+            icon = Icons.Outlined.FormatAlignCenter,
+            description = "Align center",
             selected = textAlign == TextAlign.Center,
             onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
+                tap()
 
                 onTextAlignChanged(
                     TextAlign.Center
@@ -771,12 +757,11 @@ private fun FormattingToolbar(
 
         // RIGHT
         FormattingButton(
-            text = "≡",
+            icon = Icons.AutoMirrored.Outlined.FormatAlignRight,
+            description = "Align right",
             selected = textAlign == TextAlign.Right,
             onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
+                tap()
 
                 onTextAlignChanged(
                     TextAlign.Right
@@ -786,13 +771,16 @@ private fun FormattingToolbar(
 
         ToolbarDivider()
 
-        // MORE
+        // CLEAR FORMATTING
         FormattingButton(
-            text = "•••",
+            icon = Icons.Outlined.FormatClear,
+            description = "Clear formatting",
             onClick = {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                )
+                tap()
+
+                val result = NoteRichText.clearFormatting(formattingValue)
+
+                onValueChanged(result.value, result.pending)
             }
         )
     }
@@ -804,7 +792,9 @@ private fun FormattingToolbar(
 
 @Composable
 private fun FormattingButton(
-    text: String,
+    text: String = "",
+    icon: ImageVector? = null,
+    description: String? = null,
     selected: Boolean = false,
     italic: Boolean = false,
     underline: Boolean = false,
@@ -828,34 +818,41 @@ private fun FormattingButton(
         contentAlignment = Alignment.Center
     ) {
 
-        Text(
-            text = text,
-            color = if (selected) {
-                ScrittoAmber
-            } else {
-                ScrittoCream
-            },
-            fontSize = if (text == "•••") {
-                13.sp
-            } else {
-                17.sp
-            },
-            fontWeight = if (italic) {
-                FontWeight.Normal
-            } else {
-                FontWeight.Bold
-            },
-            fontStyle = if (italic) {
-                FontStyle.Italic
-            } else {
-                FontStyle.Normal
-            },
-            textDecoration = when {
-                underline -> TextDecoration.Underline
-                strike -> TextDecoration.LineThrough
-                else -> null
-            }
-        )
+        val tint = if (selected) {
+            ScrittoAmber
+        } else {
+            ScrittoCream
+        }
+
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(22.dp)
+            )
+        } else {
+            Text(
+                text = text,
+                color = tint,
+                fontSize = 17.sp,
+                fontWeight = if (italic) {
+                    FontWeight.Normal
+                } else {
+                    FontWeight.Bold
+                },
+                fontStyle = if (italic) {
+                    FontStyle.Italic
+                } else {
+                    FontStyle.Normal
+                },
+                textDecoration = when {
+                    underline -> TextDecoration.Underline
+                    strike -> TextDecoration.LineThrough
+                    else -> null
+                }
+            )
+        }
     }
 }
 
@@ -873,230 +870,5 @@ private fun ToolbarDivider() {
             .background(
                 ScrittoBorder.copy(alpha = 0.8f)
             )
-    )
-}
-
-// ========================================================================
-// FORMATTING HELPERS
-// ========================================================================
-
-private fun hasBold(
-    value: TextFieldValue
-): Boolean {
-    return selectedStyleExists(value) {
-        it.fontWeight == FontWeight.Bold
-    }
-}
-
-private fun hasItalic(
-    value: TextFieldValue
-): Boolean {
-    return selectedStyleExists(value) {
-        it.fontStyle == FontStyle.Italic
-    }
-}
-
-private fun hasUnderline(
-    value: TextFieldValue
-): Boolean {
-    return selectedStyleExists(value) {
-        it.textDecoration == TextDecoration.Underline
-    }
-}
-
-private fun hasStrike(
-    value: TextFieldValue
-): Boolean {
-    return selectedStyleExists(value) {
-        it.textDecoration == TextDecoration.LineThrough
-    }
-}
-
-private fun selectedStyleExists(
-    value: TextFieldValue,
-    predicate: (SpanStyle) -> Boolean
-): Boolean {
-
-    val selection = value.selection
-
-    if (selection.collapsed) {
-        return false
-    }
-
-    return value.annotatedString.spanStyles.any { range ->
-        range.start <= selection.start &&
-                range.end >= selection.end &&
-                predicate(range.item)
-    }
-}
-
-// ========================================================================
-// BOLD
-// ========================================================================
-
-private fun toggleBold(
-    value: TextFieldValue
-): TextFieldValue {
-    val selection = value.selection
-    if (selection.collapsed) return value
-
-    val active = hasBold(value)
-
-    val builder = AnnotatedString.Builder(value.annotatedString)
-
-    if (active) {
-        builder.addStyle(
-            SpanStyle(fontWeight = FontWeight.Normal),
-            selection.start,
-            selection.end
-        )
-    } else {
-        builder.addStyle(
-            SpanStyle(fontWeight = FontWeight.Bold),
-            selection.start,
-            selection.end
-        )
-    }
-
-    return value.copy(
-        annotatedString = builder.toAnnotatedString(),
-        selection = selection
-    )
-}
-
-// ========================================================================
-// ITALIC
-// ========================================================================
-
-private fun toggleItalic(
-    value: TextFieldValue
-): TextFieldValue {
-    val selection = value.selection
-    if (selection.collapsed) return value
-
-    val active = hasItalic(value)
-
-    val builder = AnnotatedString.Builder(value.annotatedString)
-
-    builder.addStyle(
-        SpanStyle(
-            fontStyle = if (active) FontStyle.Normal else FontStyle.Italic
-        ),
-        selection.start,
-        selection.end
-    )
-
-    return value.copy(
-        annotatedString = builder.toAnnotatedString(),
-        selection = selection
-    )
-}
-
-// ========================================================================
-// UNDERLINE
-// ========================================================================
-
-private fun toggleUnderline(
-    value: TextFieldValue
-): TextFieldValue {
-    val selection = value.selection
-    if (selection.collapsed) return value
-
-    val active = hasUnderline(value)
-
-    val builder = AnnotatedString.Builder(value.annotatedString)
-
-    builder.addStyle(
-        SpanStyle(
-            textDecoration = if (active) {
-                TextDecoration.None
-            } else {
-                TextDecoration.Underline
-            }
-        ),
-        selection.start,
-        selection.end
-    )
-
-    return value.copy(
-        annotatedString = builder.toAnnotatedString(),
-        selection = selection
-    )
-}
-
-// ========================================================================
-// STRIKETHROUGH
-// ========================================================================
-
-private fun toggleStrike(
-    value: TextFieldValue
-): TextFieldValue {
-    val selection = value.selection
-    if (selection.collapsed) return value
-
-    val active = hasStrike(value)
-
-    val builder = AnnotatedString.Builder(value.annotatedString)
-
-    builder.addStyle(
-        SpanStyle(
-            textDecoration = if (active) {
-                TextDecoration.None
-            } else {
-                TextDecoration.LineThrough
-            }
-        ),
-        selection.start,
-        selection.end
-    )
-
-    return value.copy(
-        annotatedString = builder.toAnnotatedString(),
-        selection = selection
-    )
-}
-
-// ========================================================================
-// BULLET
-// ========================================================================
-
-private fun insertBullet(
-    value: TextFieldValue
-): TextFieldValue {
-    val cursor = value.selection.start
-    val text = value.text
-
-    val lineStart = text.lastIndexOf(
-        '\n',
-        startIndex = (cursor - 1).coerceAtLeast(0)
-    ) + 1
-
-    val bullet = "• "
-
-    val builder = AnnotatedString.Builder()
-
-    builder.append(
-        value.annotatedString.subSequence(
-            0,
-            lineStart
-        )
-    )
-
-    builder.append(bullet)
-
-    builder.append(
-        value.annotatedString.subSequence(
-            TextRange(
-                lineStart,
-                value.text.length
-            )
-        )
-    )
-
-    return TextFieldValue(
-        annotatedString = builder.toAnnotatedString(),
-        selection = TextRange(
-            cursor + bullet.length
-        )
     )
 }

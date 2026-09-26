@@ -31,8 +31,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +54,8 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -92,11 +97,39 @@ import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextMuted
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
 import com.internship.scritto.data.repository.ScrittoStore
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import android.widget.Toast
+import androidx.compose.ui.text.AnnotatedString
+import com.internship.scritto.ai.AssistantAction
+import com.internship.scritto.ai.AssistantSession
+import com.internship.scritto.ai.Attachment
+import com.internship.scritto.ai.ChatTurn
+import com.internship.scritto.ai.NavTarget
+import com.internship.scritto.components.ActionChip
+import com.internship.scritto.components.VoiceAssistantOverlay
+import com.internship.scritto.notes.NoteRichText
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val MAX_ATTACHMENTS = 2
+
+private const val GREETING =
+    "Hey. I'm Scritto AI. Ask me to create something, find a note, or help organize your workspace."
 
 private data class ChatMessage(
     val text: String,
-    val fromUser: Boolean
+    val fromUser: Boolean,
+    val actions: List<AssistantAction> = emptyList()
 )
 
 @Composable
@@ -104,16 +137,27 @@ fun AiChatScreen(
     onHome: () -> Unit,
     onNotes: () -> Unit,
     onCreateNote: () -> Unit,
-    onSchedule: () -> Unit
+    onSchedule: () -> Unit,
+    onTasks: () -> Unit = {},
+    onFiles: () -> Unit = {},
+    onOpenNote: (String) -> Unit = {}
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
+    // Coming back from a screen the assistant opened (a note, Tasks...) resumes the same chat.
+    val resumed = remember {
+        AssistantSession.activeConversationId?.let { id ->
+            ScrittoStore.getAiConversations().firstOrNull { it.id == id }
+        }
+    }
     val messages = remember {
-        mutableStateListOf(
-            ChatMessage(
-                "Hey. I'm Scritto AI. Ask me to create something, find a note, or help organize your workspace.",
-                false
-            )
-        )
+        mutableStateListOf<ChatMessage>().apply {
+            if (resumed != null && resumed.messages.isNotEmpty()) {
+                addAll(resumed.messages.map { ChatMessage(it.text, it.fromUser) })
+            } else {
+                add(ChatMessage(GREETING, false))
+            }
+        }
     }
     var input by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
@@ -121,8 +165,88 @@ fun AiChatScreen(
     var placeholderIndex by remember { mutableIntStateOf(0) }
     var recentsOpen by remember { mutableStateOf(false) }
     var thinking by remember { mutableStateOf(false) }
-    var conversationId by remember { mutableStateOf(java.util.UUID.randomUUID().toString()) }
+    var conversationId by remember { mutableStateOf(resumed?.id ?: java.util.UUID.randomUUID().toString()) }
     val scope = rememberCoroutineScope()
+
+    var assistantOpen by remember { mutableStateOf(false) }
+
+    // Back closes the voice assistant first, instead of leaving the whole chat screen.
+    androidx.activity.compose.BackHandler(enabled = assistantOpen) {
+        assistantOpen = false
+    }
+    var replyId by remember { mutableIntStateOf(0) }
+    val attachments = remember { mutableStateListOf<ScrittoStore.ImportedFile>() }
+
+    val assistant = remember { AssistantSession.assistant(context) }
+    val fileReader = remember { AssistantSession.fileReader(context) }
+
+    fun navigateTo(target: NavTarget?) {
+        when (target) {
+            NavTarget.Home -> onHome()
+            NavTarget.Notes -> onNotes()
+            NavTarget.Tasks -> onTasks()
+            NavTarget.Schedule -> onSchedule()
+            NavTarget.Files -> onFiles()
+            is NavTarget.Note -> onOpenNote(target.id)
+            null -> Unit
+        }
+    }
+
+    // Reminders created by the assistant need the notification permission, just like the manual forms.
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
+    // Bumped after files are attached so the prompt field takes focus: the files are
+    // only read once the user says what they want done with them.
+    var focusPromptSignal by remember { mutableIntStateOf(0) }
+
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        val room = MAX_ATTACHMENTS - attachments.size
+        var added = 0
+
+        uris.forEach { uri ->
+            if (added >= room) return@forEach
+
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
+            val name = context.contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            } ?: "Imported file"
+
+            // Attached files are also kept in Files, so the assistant can find them later.
+            val file = ScrittoStore.ImportedFile(name = name, uri = uri.toString())
+            ScrittoStore.addImportedFile(file)
+
+            if (attachments.none { it.uri == file.uri }) {
+                attachments += file
+                added++
+            }
+        }
+
+        if (uris.size > room) {
+            Toast.makeText(
+                context,
+                "You can attach up to $MAX_ATTACHMENTS files at a time",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        if (added > 0) focusPromptSignal++
+    }
 
     val recentConversations = remember {
         mutableStateListOf<ScrittoStore.AiConversation>().apply {
@@ -131,6 +255,91 @@ fun AiChatScreen(
     }
 
     val listState = rememberLazyListState()
+
+    /** Runs one request through Scritto AI. [voice] asks for a short, speakable answer. */
+    fun sendPrompt(rawPrompt: String, voice: Boolean = false) {
+        val files = attachments.toList()
+        val prompt = rawPrompt.trim()
+
+        // Files are never sent on their own: the user has to say what to do with them.
+        if (prompt.isEmpty() || thinking) return
+
+        attachments.clear()
+        messages += ChatMessage(
+            text = prompt + files.joinToString("") { "\n📎 ${it.name}" },
+            fromUser = true
+        )
+        input = ""
+        focused = false
+        thinking = true
+
+        scope.launch {
+            val attached = files.map { file ->
+                val read = fileReader.read(file)
+                Attachment(
+                    name = file.name,
+                    text = read.text.takeIf { read.ok },
+                    error = read.text.takeUnless { read.ok }
+                )
+            }
+
+            val history = messages.dropLast(1).map { ChatTurn(it.text, it.fromUser) }
+            val reply = assistant.respond(history, prompt, attached, voice)
+
+            messages += ChatMessage(reply.text, false, reply.actions)
+            replyId++
+            thinking = false
+
+            ScrittoStore.saveAiConversation(
+                id = conversationId,
+                title = messages.firstOrNull { it.fromUser }?.text?.lineSequence()?.first()
+                    ?.let { if (it.length > 44) it.take(44) + "…" else it }
+                    ?: "New conversation",
+                messages = messages.map {
+                    ScrittoStore.AiMessage(it.text, it.fromUser)
+                }
+            )
+
+            AssistantSession.activeConversationId = conversationId
+            recentConversations.clear()
+            recentConversations.addAll(ScrittoStore.getAiConversations())
+
+            val createdReminder = reply.actions.any {
+                it.kind == AssistantAction.Kind.TASK || it.kind == AssistantAction.Kind.EVENT
+            }
+            if (
+                createdReminder &&
+                android.os.Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+
+            // "Open my notes" and friends: let the confirmation land (and be spoken) first.
+            reply.navigation?.let { target ->
+                delay(if (voice) 1600 else 600)
+                assistantOpen = false
+                navigateTo(target)
+            }
+        }
+    }
+
+    // Home's mic button lands here with the assistant ready to listen.
+    LaunchedEffect(Unit) {
+        if (AssistantSession.pendingVoice) {
+            AssistantSession.pendingVoice = false
+            assistantOpen = true
+        }
+    }
+
+    // A prompt typed on Home ("Ask or command...") arrives here.
+    LaunchedEffect(Unit) {
+        AssistantSession.pendingPrompt?.let { prompt ->
+            AssistantSession.pendingPrompt = null
+            sendPrompt(prompt)
+        }
+    }
 
     val placeholders = remember {
         listOf(
@@ -163,16 +372,23 @@ fun AiChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .imePadding()
                 .navigationBarsPadding()
-                .padding(start = 24.dp, end = 24.dp, top = 72.dp, bottom = 12.dp)
+                .padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 8.dp)
         ) {
+        // Narrow phones drop the labels so the title and the two actions never collide.
+        val compactHeader = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 390
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Title area takes whatever space is left and shortens itself if it has to.
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -191,46 +407,55 @@ fun AiChatScreen(
                     )
                 }
 
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "Scritto AI",
                         color = ScrittoCreamBright,
                         fontSize = 21.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                     Text(
                         text = "Your workspace assistant",
                         color = ScrittoTextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
 
+            // Plain, background-free actions. The offset lines the last icon up with the page margin.
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(ScrittoSurface.copy(alpha = 0.82f))
-                    .border(
-                        1.dp,
-                        ScrittoBorder.copy(alpha = 0.85f),
-                        RoundedCornerShape(18.dp)
-                    )
-                    .clickable { recentsOpen = !recentsOpen }
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.offset(x = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.History,
-                    contentDescription = "Recent conversations",
-                    tint = if (recentsOpen) ScrittoAmberBright else ScrittoTextSecondary,
-                    modifier = Modifier.size(17.dp)
+                HeaderAction(
+                    icon = Icons.Outlined.Add,
+                    label = "New",
+                    description = "New conversation",
+                    compact = compactHeader,
+                    enabled = !thinking,
+                    highlighted = false,
+                    onClick = {
+                        messages.clear()
+                        messages += ChatMessage(GREETING, false)
+                        attachments.clear()
+                        conversationId = java.util.UUID.randomUUID().toString()
+                        AssistantSession.activeConversationId = null
+                        input = ""
+                        recentsOpen = false
+                    }
                 )
-                Text(
-                    text = "Recent",
-                    color = if (recentsOpen) ScrittoCreamBright else ScrittoTextSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+
+                HeaderAction(
+                    icon = Icons.Outlined.History,
+                    label = "Recent",
+                    description = "Recent conversations",
+                    compact = compactHeader,
+                    enabled = true,
+                    highlighted = recentsOpen,
+                    onClick = { recentsOpen = !recentsOpen }
                 )
             }
         }
@@ -249,6 +474,7 @@ fun AiChatScreen(
                 conversations = recentConversations,
                 onConversationSelected = { conversation ->
                     conversationId = conversation.id
+                    AssistantSession.activeConversationId = conversation.id
                     messages.clear()
                     messages.addAll(
                         conversation.messages.map {
@@ -256,10 +482,7 @@ fun AiChatScreen(
                         }
                     )
                     if (messages.isEmpty()) {
-                        messages += ChatMessage(
-                            "Hey. I'm Scritto AI. Ask me to create something, find a note, or help organize your workspace.",
-                            false
-                        )
+                        messages += ChatMessage(GREETING, false)
                     }
                     input = ""
                     focused = false
@@ -299,20 +522,38 @@ fun AiChatScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start
                     ) {
-                        Text(
-                            text = message.text,
-                            color = if (message.fromUser) MaterialTheme.colorScheme.background else ScrittoCream,
-                            fontSize = 15.sp,
-                            lineHeight = 21.sp,
-                            modifier = Modifier
-                                .fillMaxWidth(0.86f)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    if (message.fromUser) ScrittoCreamBright
-                                    else ScrittoSurface.copy(alpha = 0.94f)
+                        Column(
+                            modifier = Modifier.fillMaxWidth(0.86f),
+                            horizontalAlignment = if (message.fromUser) Alignment.End else Alignment.Start,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = if (message.fromUser) {
+                                    AnnotatedString(message.text)
+                                } else {
+                                    NoteRichText.renderMarkup(message.text)
+                                },
+                                color = if (message.fromUser) MaterialTheme.colorScheme.background else ScrittoCream,
+                                fontSize = 15.sp,
+                                lineHeight = 21.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(
+                                        if (message.fromUser) ScrittoCreamBright
+                                        else ScrittoSurface.copy(alpha = 0.94f)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 13.dp)
+                            )
+
+                            // What the assistant actually did - tap to jump there.
+                            message.actions.forEach { action ->
+                                ActionChip(
+                                    action = action,
+                                    onClick = { navigateTo(action.target) }
                                 )
-                                .padding(horizontal = 16.dp, vertical = 13.dp)
-                        )
+                            }
+                        }
                     }
                 }
             }
@@ -323,42 +564,84 @@ fun AiChatScreen(
                 }
             }        }
 
+        if (attachments.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                attachments.forEach { file ->
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(ScrittoSurface.copy(alpha = 0.94f))
+                            .border(1.dp, ScrittoBorder.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+                            .padding(start = 12.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "\uD83D\uDCCE " + if (file.name.length > 26) file.name.take(26) + "\u2026" else file.name,
+                            color = ScrittoCream,
+                            fontSize = 13.sp
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable { attachments.remove(file) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Remove attachment",
+                                tint = ScrittoTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         AiComposer(
             input = input,
             onInputChange = { input = it },
             focused = focused,
             onFocusedChange = { focused = it },
-            placeholder = placeholders[placeholderIndex],
-            onSend = {
-                val prompt = input.trim()
-                if (prompt.isNotEmpty() && !thinking) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    messages += ChatMessage(prompt, true)
-                    input = ""
-                    focused = false
-                    thinking = true
-
-                    scope.launch {
-                        kotlinx.coroutines.delay(620)
-                        messages += ChatMessage(aiReply(prompt), false)
-                        thinking = false
-
-                        ScrittoStore.saveAiConversation(
-                            id = conversationId,
-                            title = if (prompt.length > 44) prompt.take(44) + "…" else prompt,
-                            messages = messages.map {
-                                ScrittoStore.AiMessage(it.text, it.fromUser)
-                            }
-                        )
-
-                        recentConversations.clear()
-                        recentConversations.addAll(ScrittoStore.getAiConversations())
-                    }
+            placeholder = if (attachments.isNotEmpty()) {
+                "What should I do with your file${if (attachments.size > 1) "s" else ""}?"
+            } else {
+                placeholders[placeholderIndex]
+            },
+            canSend = input.isNotBlank(),
+            hasAttachments = attachments.isNotEmpty(),
+            focusSignal = focusPromptSignal,
+            onAttach = {
+                if (attachments.size >= MAX_ATTACHMENTS) {
+                    Toast.makeText(
+                        context,
+                        "You can attach up to $MAX_ATTACHMENTS files at a time",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    filePicker.launch(arrayOf("*/*"))
                 }
+            },
+            onMic = {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                focused = false
+                assistantOpen = true
+            },
+            onSend = {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                sendPrompt(input)
             }
         )
 
-        Spacer(modifier = Modifier.height(44.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         AiNavigationIsland(
             expanded = islandExpanded,
@@ -371,6 +654,68 @@ fun AiChatScreen(
             onCreateNote = onCreateNote,
             onSchedule = onSchedule
         )
+        }
+
+        if (assistantOpen) {
+            val lastReply = messages.lastOrNull { !it.fromUser }
+
+            VoiceAssistantOverlay(
+                thinking = thinking,
+                replyText = lastReply?.text,
+                replyId = replyId,
+                actions = lastReply?.actions.orEmpty(),
+                onUtterance = { sendPrompt(it, voice = true) },
+                onActionClick = { action ->
+                    assistantOpen = false
+                    navigateTo(action.target)
+                },
+                onDismiss = { assistantOpen = false }
+            )
+        }
+    }
+}
+
+/** A transparent header action: icon (+ label when there is room), 48 dp tall touch target. */
+@Composable
+private fun HeaderAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    description: String,
+    compact: Boolean,
+    enabled: Boolean,
+    highlighted: Boolean,
+    onClick: () -> Unit
+) {
+    val tint = when {
+        !enabled -> ScrittoTextMuted
+        highlighted -> ScrittoAmberBright
+        else -> ScrittoTextSecondary
+    }
+
+    Row(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = if (compact) 12.dp else 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = tint,
+            modifier = Modifier.size(19.dp)
+        )
+
+        if (!compact) {
+            Text(
+                text = label,
+                color = tint,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
         }
     }
 }
@@ -562,9 +907,20 @@ private fun AiComposer(
     focused: Boolean,
     onFocusedChange: (Boolean) -> Unit,
     placeholder: String,
+    canSend: Boolean,
+    hasAttachments: Boolean,
+    focusSignal: Int,
+    onAttach: () -> Unit,
+    onMic: () -> Unit,
     onSend: () -> Unit
 ) {
     val hasText = input.isNotBlank()
+    val expanded = focused || hasText || hasAttachments
+    val promptFocus = remember { FocusRequester() }
+
+    LaunchedEffect(focusSignal) {
+        if (focusSignal > 0) promptFocus.requestFocus()
+    }
     val borderAlpha by animateFloatAsState(
         targetValue = if (focused || hasText) 0.68f else 0.10f,
         animationSpec = tween(240, easing = FastOutSlowInEasing),
@@ -579,7 +935,7 @@ private fun AiComposer(
         animationSpec = tween(240),
         label = "aiComposerAccent"
     )
-    val composerHeight = if (focused || hasText) 122.dp else 72.dp
+    val composerHeight = if (expanded) 104.dp else 80.dp
 
     Box(
         modifier = Modifier
@@ -611,6 +967,26 @@ private fun AiComposer(
                 }
                 .padding(start = 17.dp, end = 10.dp, top = 12.dp, bottom = 10.dp)
         ) {
+            // Collapsed composer: keep "attach a file" one tap away.
+            if (!expanded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(ScrittoAmber.copy(alpha = 0.14f))
+                        .clickable(onClick = onAttach),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = "Attach a file",
+                        tint = ScrittoAmberBright,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -623,6 +999,7 @@ private fun AiComposer(
                         onValueChange = onInputChange,
                         modifier = Modifier
                             .weight(1f)
+                            .focusRequester(promptFocus)
                             .onFocusChanged {
                                 onFocusedChange(it.isFocused)
                             },
@@ -658,7 +1035,7 @@ private fun AiComposer(
                 }
 
                 AnimatedVisibility(
-                    visible = focused || hasText,
+                    visible = expanded,
                     enter = fadeIn(tween(180)) + scaleIn(
                         initialScale = 0.94f,
                         animationSpec = tween(180)
@@ -675,7 +1052,7 @@ private fun AiComposer(
                         ComposerAction(
                             icon = Icons.Outlined.Add,
                             label = "Attach",
-                            onClick = {}
+                            onClick = onAttach
                         )
                         ComposerAction(
                             icon = Icons.Outlined.AlternateEmail,
@@ -701,11 +1078,12 @@ private fun AiComposer(
         }
 
         val sendScale by animateFloatAsState(
-            targetValue = if (hasText) 1f else 0.88f,
+            targetValue = if (canSend) 1f else 0.88f,
             animationSpec = tween(180),
             label = "sendScale"
         )
 
+        // Empty composer: the button becomes the microphone that opens the voice assistant.
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -716,22 +1094,22 @@ private fun AiComposer(
                 }
                 .clip(CircleShape)
                 .background(
-                    if (hasText) {
+                    if (canSend) {
                         ScrittoAmber
                     } else {
-                        ScrittoBorder.copy(alpha = 0.55f)
+                        ScrittoAmber.copy(alpha = 0.16f)
                     }
                 )
-                .clickable(enabled = hasText, onClick = onSend),
+                .clickable(onClick = if (canSend) onSend else onMic),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Outlined.ArrowUpward,
-                contentDescription = "Send",
-                tint = if (hasText) {
+                imageVector = if (canSend) Icons.Outlined.ArrowUpward else Icons.Outlined.Mic,
+                contentDescription = if (canSend) "Send" else "Talk to Scritto",
+                tint = if (canSend) {
                     MaterialTheme.colorScheme.background
                 } else {
-                    ScrittoTextMuted
+                    ScrittoAmberBright
                 },
                 modifier = Modifier.size(20.dp)
             )
@@ -915,29 +1293,5 @@ private class FoldedSheetShape(
             close()
         }
         return Outline.Generic(path)
-    }
-}
-
-private fun aiReply(prompt: String): String {
-    val normalized = prompt.lowercase()
-
-    return when {
-        "new note" in normalized || "create note" in normalized ->
-            "I can open a new note for you. Use the + button or the Note quick action to start writing."
-
-        "note" in normalized ->
-            "I can help you work with your notes. Try asking about recent notes, a pinned note, or creating a new note."
-
-        "schedule" in normalized || "class" in normalized ->
-            "Schedule is ready in Scritto. The schedule workspace is the place for classes and events."
-
-        "help" in normalized || "what can you do" in normalized ->
-            "I can help with notes, tasks, events, classes, files, and your schedule. More workspace actions will be added here as Scritto grows."
-
-        "hello" in normalized || "hi" in normalized || "hey" in normalized ->
-            "Hey bro 👋 What are we working on?"
-
-        else ->
-            "Got it. I understand the request, but that action isn't connected yet. The AI workspace will gain more Scritto actions as we build them."
     }
 }

@@ -24,7 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Event
-import androidx.compose.material.icons.outlined.NoteAdd
+import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
@@ -44,6 +45,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.internship.scritto.ai.AssistantSession
 import com.internship.scritto.components.ScrittoDock
 import com.internship.scritto.components.ScrittoMesh
 import com.internship.scritto.data.repository.ScrittoStore
@@ -76,7 +78,7 @@ private val createActions = listOf(
     CreateAction("New Task", Icons.Outlined.CheckCircle),
     CreateAction("Add Event", Icons.Outlined.Event),
     CreateAction("Add Class", Icons.Outlined.CalendarMonth),
-    CreateAction("Import File", Icons.Outlined.NoteAdd)
+    CreateAction("Import File", Icons.AutoMirrored.Outlined.NoteAdd)
 )
 
 @Composable
@@ -157,6 +159,27 @@ fun ScrittoNavigation() {
                             launchSingleTop = true
                         }
                     },
+                    onEvent = {
+                        createMenuExpanded = false
+                        selectedDockIndex = -1
+                        navController.navigate(scheduleRoute(true))
+                    },
+                    onVoice = {
+                        createMenuExpanded = false
+                        AssistantSession.pendingVoice = true
+                        selectedDockIndex = 3
+                        navController.navigate(AI_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onAskAssistant = { prompt ->
+                        createMenuExpanded = false
+                        AssistantSession.pendingPrompt = prompt
+                        selectedDockIndex = 3
+                        navController.navigate(AI_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    },
                     onFiles = {
                         createMenuExpanded = false
                         navController.navigate(FILES_ROUTE) {
@@ -224,6 +247,20 @@ fun ScrittoNavigation() {
                         navController.navigate(scheduleRoute()) {
                             launchSingleTop = true
                         }
+                    },
+                    onTasks = {
+                        selectedDockIndex = 2
+                        navController.navigate(TASK_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onFiles = {
+                        navController.navigate(FILES_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onOpenNote = { noteId ->
+                        navController.navigate("note/$noteId")
                     }
                 )
             }
@@ -319,6 +356,20 @@ fun ScrittoNavigation() {
 
                             Row(
                                 modifier = Modifier
+                                    // Fully hidden rows must not exist for touch purposes: even at
+                                    // zero opacity they used to swallow taps on the bottom-centre of
+                                    // every screen (e.g. the "Create task" / "Save" buttons).
+                                    .layout { measurable, constraints ->
+                                        val placeable = measurable.measure(constraints)
+                                        val hidden = !createMenuExpanded && alpha < 0.01f
+
+                                        layout(
+                                            if (hidden) 0 else placeable.width,
+                                            if (hidden) 0 else placeable.height
+                                        ) {
+                                            placeable.place(0, 0)
+                                        }
+                                    }
                                     .graphicsLayer {
                                         this.alpha = alpha
                                         scaleX = scale
@@ -359,6 +410,12 @@ fun ScrittoNavigation() {
                                                 createMenuExpanded = false
                                                 selectedDockIndex = -1
                                                 navController.navigate(scheduleRoute(true))
+                                            }
+                                            "Import File" -> {
+                                                createMenuExpanded = false
+                                                navController.navigate(FILES_ROUTE) {
+                                                    launchSingleTop = true
+                                                }
                                             }
                                         }
                                     }

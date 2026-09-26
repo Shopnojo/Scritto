@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import java.util.Locale
 private const val DAY_MILLIS = 24L * 60L * 60L * 1000L
 
 private data class TimelineItem(
+    val key: String,
     val time: Long,
     val title: String,
     val subtitle: String,
@@ -54,6 +56,7 @@ private data class TimelineItem(
 @Composable
 fun ScheduleScreen(initialOpen: Boolean = false) {
     val context = LocalContext.current
+    val locale = LocalConfiguration.current.locales[0]
     val events = ScrittoStore.events
     val tasks = ScrittoStore.tasks
     val today = startOfDay(System.currentTimeMillis())
@@ -79,6 +82,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
     val items = buildList {
         dayEvents.forEach { event ->
             add(TimelineItem(
+                key = "event-${event.id}",
                 time = event.startAt,
                 title = event.title,
                 subtitle = event.location.ifBlank { if (event.type == ScheduleEvent.Type.CLASS) "Class" else "Event" },
@@ -88,6 +92,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
         }
         dayTasks.forEach { task ->
             add(TimelineItem(
+                key = "task-${task.id}",
                 time = task.dueAt,
                 title = task.title,
                 subtitle = "Task • ${task.priority.name.lowercase().replaceFirstChar { it.uppercase() }}",
@@ -124,7 +129,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date(selectedDay)),
+                        SimpleDateFormat("EEEE, d MMMM", locale).format(Date(selectedDay)),
                         color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 30.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -206,7 +211,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                                     verticalArrangement = Arrangement.Center,
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    SimpleDateFormat("MMM", Locale.getDefault())
+                                    SimpleDateFormat("MMM", locale)
                                         .format(Date(day))
                                         .uppercase()
                                         .take(3)
@@ -231,7 +236,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)).uppercase(),
+                                SimpleDateFormat("EEE", locale).format(Date(day)).uppercase(),
                                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -255,7 +260,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
             Spacer(Modifier.height(24.dp))
 
             if (isSameDay(selectedDay, today)) {
-                val nowText = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(currentTime))
+                val nowText = SimpleDateFormat("h:mm a", locale).format(Date(currentTime))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
                     Spacer(Modifier.width(8.dp))
@@ -270,8 +275,8 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                 ScheduleEmptyState(canAdd = !isBeforeToday(selectedDay, today)) { showAdd = true }
             } else {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    item { Text("TODAY'S FLOW", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp) }
-                    items(items, key = { "${it.kind}-${it.eventId ?: it.title}-${it.time}" }) { item ->
+                    item { Text(if (isSameDay(selectedDay, today)) "TODAY'S FLOW" else "THE DAY'S FLOW", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp) }
+                    items(items, key = { it.key }) { item ->
                         TimelineRow(item) {
                             item.eventId?.let { id -> events.firstOrNull { it.id == id }?.let { deleteEvent = it } }
                         }
@@ -310,12 +315,12 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
         }
     }
     if (showDatePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = selectedDay)
+        val state = rememberDatePickerState(initialSelectedDateMillis = localDateToPickerMillis(selectedDay))
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    state.selectedDateMillis?.let { selectedDay = startOfDay(it) }
+                    state.selectedDateMillis?.let { selectedDay = pickerMillisToLocalDate(it) }
                     showDatePicker = false
                 }) { Text("Done") }
             },
@@ -327,6 +332,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
 
 @Composable
 private fun TimelineRow(item: TimelineItem, onDelete: () -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
     val accent = when (item.kind) {
         TimelineItem.Kind.CLASS -> MaterialTheme.colorScheme.primary
         TimelineItem.Kind.EVENT -> MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
@@ -345,8 +351,8 @@ private fun TimelineRow(item: TimelineItem, onDelete: () -> Unit) {
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column(Modifier.width(58.dp)) {
-            Text(SimpleDateFormat("h:mm", Locale.getDefault()).format(Date(item.time)), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            Text(SimpleDateFormat("a", Locale.getDefault()).format(Date(item.time)).uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(SimpleDateFormat("h:mm", locale).format(Date(item.time)), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            Text(SimpleDateFormat("a", locale).format(Date(item.time)).uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Box(Modifier.padding(top = 2.dp).size(8.dp).clip(CircleShape).background(accent))
         Spacer(Modifier.width(10.dp))
@@ -527,10 +533,10 @@ private fun AddSchedulePanel(context: Context, initialDate: Long, today: Long, o
     }
 
     if (datePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = date)
+        val state = rememberDatePickerState(initialSelectedDateMillis = localDateToPickerMillis(date))
         DatePickerDialog(
             onDismissRequest = { datePicker = false },
-            confirmButton = { TextButton(onClick = { state.selectedDateMillis?.let { date = startOfDay(it) }; datePicker = false }) { Text("Done") } },
+            confirmButton = { TextButton(onClick = { state.selectedDateMillis?.let { date = pickerMillisToLocalDate(it) }; datePicker = false }) { Text("Done") } },
             dismissButton = { TextButton(onClick = { datePicker = false }) { Text("Cancel") } }
         ) { DatePicker(state = state, showModeToggle = false) }
     }
@@ -588,4 +594,34 @@ private fun isSameDay(first: Long, second: Long): Boolean {
     val a = Calendar.getInstance().apply { timeInMillis = first }
     val b = Calendar.getInstance().apply { timeInMillis = second }
     return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
+}
+
+// Material's DatePicker speaks UTC midnight; the rest of the screen speaks local midnight.
+// Without converting, anywhere east of UTC (e.g. India) the picker opens on the previous day.
+private fun localDateToPickerMillis(localMillis: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = localMillis }
+
+    return Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(
+            local.get(Calendar.YEAR),
+            local.get(Calendar.MONTH),
+            local.get(Calendar.DAY_OF_MONTH)
+        )
+    }.timeInMillis
+}
+
+private fun pickerMillisToLocalDate(pickerMillis: Long): Long {
+    val utc = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = pickerMillis
+    }
+
+    return Calendar.getInstance().apply {
+        clear()
+        set(
+            utc.get(Calendar.YEAR),
+            utc.get(Calendar.MONTH),
+            utc.get(Calendar.DAY_OF_MONTH)
+        )
+    }.timeInMillis
 }

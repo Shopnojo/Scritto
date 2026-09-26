@@ -181,6 +181,43 @@ object ScrittoStore {
         return task
     }
 
+    fun getTask(id: String): Task? {
+        return _tasks.firstOrNull { it.id == id }
+    }
+
+    /** Edits a task in place and re-arms its reminder. Null arguments keep the current value. */
+    fun updateTask(
+        context: Context,
+        id: String,
+        title: String? = null,
+        description: String? = null,
+        dueAt: Long? = null,
+        priority: Task.Priority? = null
+    ): Task? {
+        checkInitialized()
+
+        val index = _tasks.indexOfFirst { it.id == id }
+        if (index == -1) return null
+
+        val current = _tasks[index]
+        val updated = current.copy(
+            title = title?.trim()?.takeIf { it.isNotEmpty() } ?: current.title,
+            description = description?.trim() ?: current.description,
+            dueAt = dueAt ?: current.dueAt,
+            priority = priority ?: current.priority
+        )
+
+        _tasks[index] = updated
+        persistTasks()
+
+        TaskReminderScheduler.cancel(context.applicationContext, id)
+        if (!updated.completed) {
+            TaskReminderScheduler.schedule(context.applicationContext, updated)
+        }
+
+        return updated
+    }
+
     fun setTaskCompleted(
         context: Context,
         id: String,
@@ -316,6 +353,62 @@ object ScrittoStore {
         return event
     }
 
+    fun getScheduleEvent(id: String): ScheduleEvent? {
+        return _events.firstOrNull { it.id == id }
+    }
+
+    /** Edits an event in place and re-arms its reminder. Null arguments keep the current value. */
+    fun updateScheduleEvent(
+        context: Context,
+        id: String,
+        title: String? = null,
+        location: String? = null,
+        startAt: Long? = null,
+        endAt: Long? = null,
+        type: ScheduleEvent.Type? = null,
+        reminderMinutes: Int? = null
+    ): ScheduleEvent? {
+        checkInitialized()
+
+        val index = _events.indexOfFirst { it.id == id }
+        if (index == -1) return null
+
+        val current = _events[index]
+        val newStart = startAt ?: current.startAt
+        val newEnd = endAt ?: current.endAt
+
+        if (startAt != null) {
+            val today = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
+            require(newStart >= today) {
+                "Schedule events and classes cannot be moved to past dates."
+            }
+        }
+        require(newEnd > newStart) { "An event must end after it starts." }
+
+        val updated = current.copy(
+            title = title?.trim()?.takeIf { it.isNotEmpty() } ?: current.title,
+            location = location?.trim() ?: current.location,
+            startAt = newStart,
+            endAt = newEnd,
+            type = type ?: current.type,
+            reminderMinutes = reminderMinutes ?: current.reminderMinutes
+        )
+
+        _events[index] = updated
+        persistEvents()
+
+        EventReminderScheduler.cancel(context.applicationContext, id)
+        EventReminderScheduler.schedule(context.applicationContext, updated)
+
+        return updated
+    }
+
     fun deleteScheduleEvent(context: Context, id: String) {
         checkInitialized()
         EventReminderScheduler.cancel(context.applicationContext, id)
@@ -379,6 +472,14 @@ object ScrittoStore {
 
         if (_importedFiles.none { it.uri == file.uri }) {
             _importedFiles.add(0, file)
+            persistImportedFiles()
+        }
+    }
+
+    fun removeImportedFile(uri: String) {
+        checkInitialized()
+
+        if (_importedFiles.removeAll { it.uri == uri }) {
             persistImportedFiles()
         }
     }

@@ -17,7 +17,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import com.internship.scritto.components.MicWaveButton
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
@@ -59,11 +73,15 @@ fun HomeScreen(
     onNewNote: () -> Unit = {},
     onSchedule: () -> Unit = {},
     onFiles: () -> Unit = {},
-    onTasks: () -> Unit = {}
+    onTasks: () -> Unit = {},
+    onEvent: () -> Unit = onSchedule,
+    onAskAssistant: (String) -> Unit = {},
+    onVoice: () -> Unit = {}
 ) {
     val pinnedNote = ScrittoStore.notes.firstOrNull { it.isPinned }
     val recentNotes = ScrittoStore.notes
         .filter { !it.isPinned }
+        .sortedByDescending { it.updatedAt }
         .take(3)
     val dashboardScrollState = rememberScrollState()
 
@@ -89,7 +107,7 @@ fun HomeScreen(
         // ================================================================
 
         Text(
-            text = "Good evening",
+            text = greeting(),
             color = ScrittoCreamBright,
             fontSize = 34.sp,
             lineHeight = 40.sp,
@@ -119,7 +137,15 @@ fun HomeScreen(
             value = commandText,
             onValueChange = { newValue ->
                 commandText = newValue
-            }
+            },
+            onSubmit = {
+                val prompt = commandText.trim()
+                if (prompt.isNotEmpty()) {
+                    commandText = ""
+                    onAskAssistant(prompt)
+                }
+            },
+            onMic = onVoice
         )
 
         Spacer(
@@ -163,7 +189,8 @@ fun HomeScreen(
             HomeQuickAction(
                 modifier = Modifier.weight(1f),
                 title = "Event",
-                icon = Icons.Outlined.Event
+                icon = Icons.Outlined.Event,
+                onClick = onEvent
             )
 
             HomeQuickAction(
@@ -271,34 +298,50 @@ fun HomeScreen(
 @Composable
 private fun HomeCommandBar(
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onMic: () -> Unit
 ) {
-    Box(
+    // Hints drift by while the bar is empty, teaching what it can do.
+    val hints = remember {
+        listOf(
+            "Ask or command...",
+            "Schedule a task...",
+            "Create an event reminder...",
+            "Summarize your file..."
+        )
+    }
+    var hintIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(value.isEmpty()) {
+        while (value.isEmpty()) {
+            delay(2600)
+            hintIndex = (hintIndex + 1) % hints.size
+        }
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
-            .clip(
-                RoundedCornerShape(18.dp)
-            )
-            .background(
-                ScrittoSurface
-            )
+            .height(60.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(ScrittoSurface)
             .border(
                 width = 1.dp,
                 color = ScrittoBorder,
                 shape = RoundedCornerShape(18.dp)
             )
-            .padding(
-                horizontal = 18.dp
-            ),
-        contentAlignment = Alignment.CenterStart
+            .padding(start = 18.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
 
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { onSubmit() }),
             textStyle = TextStyle(
                 color = ScrittoCream,
                 fontSize = 16.sp
@@ -306,16 +349,35 @@ private fun HomeCommandBar(
             cursorBrush = SolidColor(ScrittoAmber),
             decorationBox = { innerTextField ->
 
-                if (value.isEmpty()) {
-                    Text(
-                        text = "Ask or command...",
-                        color = ScrittoTextMuted,
-                        fontSize = 16.sp
-                    )
-                }
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        AnimatedContent(
+                            targetState = hints[hintIndex],
+                            transitionSpec = {
+                                (fadeIn(tween(480, delayMillis = 120)) +
+                                    slideInVertically(tween(480, delayMillis = 120)) { it / 2 }) togetherWith
+                                    (fadeOut(tween(260)) +
+                                        slideOutVertically(tween(260)) { -it / 2 })
+                            },
+                            label = "commandHint"
+                        ) { hint ->
+                            Text(
+                                text = hint,
+                                color = ScrittoTextMuted,
+                                fontSize = 16.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
 
-                innerTextField()
+                    innerTextField()
+                }
             }
+        )
+
+        MicWaveButton(
+            onClick = onMic,
+            size = 44.dp
         )
     }
 }
@@ -548,5 +610,20 @@ private fun RecentNoteCard(
                 maxLines = 2
             )
         }
+    }
+}
+
+// ========================================================================
+// GREETING
+// ========================================================================
+
+private fun greeting(): String {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+
+    return when (hour) {
+        in 5..11 -> "Good morning..."
+        in 12..16 -> "Good afternoon..."
+        in 17..21 -> "Good evening..."
+        else -> "Late Night..."
     }
 }

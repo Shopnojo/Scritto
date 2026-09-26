@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
@@ -56,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,6 +76,8 @@ fun TaskScreen() {
 
     var showAddTask by remember { mutableStateOf(false) }
     var taskForDelete by remember { mutableStateOf<Task?>(null) }
+    var taskForActions by remember { mutableStateOf<Task?>(null) }
+    var taskForEdit by remember { mutableStateOf<Task?>(null) }
 
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(
@@ -209,7 +213,7 @@ fun TaskScreen() {
                                     )
                                 },
                                 onDelete = {
-                                    taskForDelete = task
+                                    taskForActions = task
                                 }
                             )
                         }
@@ -235,7 +239,7 @@ fun TaskScreen() {
                                     )
                                 },
                                 onDelete = {
-                                    taskForDelete = task
+                                    taskForActions = task
                                 }
                             )
                         }
@@ -250,6 +254,43 @@ fun TaskScreen() {
                 onDismiss = { showAddTask = false },
                 onCreated = {
                     showAddTask = false
+
+                    if (
+                        android.os.Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        )
+                    }
+                }
+            )
+        }
+
+        taskForActions?.let { task ->
+            TaskActionsSheet(
+                task = task,
+                onDismiss = { taskForActions = null },
+                onEdit = {
+                    taskForEdit = task
+                    taskForActions = null
+                },
+                onDelete = {
+                    taskForDelete = task
+                    taskForActions = null
+                }
+            )
+        }
+
+        taskForEdit?.let { task ->
+            AddTaskPanel(
+                context = context,
+                existing = task,
+                onDismiss = { taskForEdit = null },
+                onCreated = {
+                    taskForEdit = null
 
                     if (
                         android.os.Build.VERSION.SDK_INT >= 33 &&
@@ -281,21 +322,29 @@ fun TaskScreen() {
 @Composable
 private fun AddTaskPanel(
     context: Context,
+    existing: Task? = null,
     onDismiss: () -> Unit,
     onCreated: () -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var selectedDate by remember { mutableStateOf(startOfTodayMillis()) }
-    var selectedHour by remember { mutableStateOf<Int?>(null) }
-    var selectedMinute by remember { mutableStateOf<Int?>(null) }
-    var priority by remember { mutableStateOf(Task.Priority.MEDIUM) }
+    val existingDue = remember(existing) {
+        existing?.let { Calendar.getInstance().apply { timeInMillis = it.dueAt } }
+    }
+
+    var title by remember { mutableStateOf(existing?.title ?: "") }
+    var description by remember { mutableStateOf(existing?.description ?: "") }
+    var selectedDate by remember {
+        mutableStateOf(
+            existing?.let { startOfDayMillis(it.dueAt) } ?: startOfTodayMillis()
+        )
+    }
+    var selectedHour by remember { mutableStateOf<Int?>(existingDue?.get(Calendar.HOUR_OF_DAY)) }
+    var selectedMinute by remember { mutableStateOf<Int?>(existingDue?.get(Calendar.MINUTE)) }
+    var priority by remember { mutableStateOf(existing?.priority ?: Task.Priority.MEDIUM) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
     val canCreate =
         title.isNotBlank() &&
-            selectedDate != null &&
             selectedHour != null &&
             selectedMinute != null
 
@@ -326,7 +375,7 @@ private fun AddTaskPanel(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "New task",
+                text = if (existing != null) "Edit task" else "New task",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 21.sp,
                 fontWeight = FontWeight.SemiBold
@@ -427,13 +476,24 @@ private fun AddTaskPanel(
                         selectedMinute!!
                     )
 
-                    ScrittoStore.createTask(
-                        context = context,
-                        title = title,
-                        description = description,
-                        dueAt = dueAt,
-                        priority = priority
-                    )
+                    if (existing != null) {
+                        ScrittoStore.updateTask(
+                            context = context,
+                            id = existing.id,
+                            title = title,
+                            description = description,
+                            dueAt = dueAt,
+                            priority = priority
+                        )
+                    } else {
+                        ScrittoStore.createTask(
+                            context = context,
+                            title = title,
+                            description = description,
+                            dueAt = dueAt,
+                            priority = priority
+                        )
+                    }
 
                     onCreated()
                 },
@@ -446,7 +506,7 @@ private fun AddTaskPanel(
                 )
             ) {
                 Text(
-                    text = "Create task",
+                    text = if (existing != null) "Save changes" else "Create task",
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -457,7 +517,7 @@ private fun AddTaskPanel(
         val datePickerState =
             androidx.compose.material3.rememberDatePickerState(
                 initialSelectedDateMillis =
-                    selectedDate
+                    localDateToPickerMillis(selectedDate)
             )
 
         DatePickerDialog(
@@ -465,7 +525,7 @@ private fun AddTaskPanel(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        datePickerState.selectedDateMillis?.let { selectedDate = it }
+                        datePickerState.selectedDateMillis?.let { selectedDate = pickerMillisToLocalDate(it) }
                         showDatePicker = false
                     }
                 ) {
@@ -791,7 +851,7 @@ private fun TaskRow(
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text = text.uppercase(Locale.getDefault()),
+        text = text.uppercase(LocalConfiguration.current.locales[0]),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,
@@ -846,6 +906,95 @@ private fun EmptyTaskState(
                     vertical = 11.dp
                 )
         )
+    }
+}
+
+@Composable
+private fun TaskActionsSheet(
+    task: Task,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.72f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 100.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .clickable(enabled = false) {}
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = task.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+
+            Text(
+                text = dueLabel(task.dueAt),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onEdit)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+
+                Spacer(modifier = Modifier.size(12.dp))
+
+                Column {
+                    Text(
+                        text = "Edit task",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Change the title, date, time or priority",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onDelete)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Delete",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }
 
@@ -961,11 +1110,51 @@ private fun isSameDay(first: Long, second: Long): Boolean {
 }
 
 
+private fun startOfDayMillis(timestamp: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = timestamp
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
 private fun startOfTodayMillis(): Long {
     return Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+// Material's DatePicker speaks UTC midnight; the rest of the screen speaks local midnight.
+// Without converting, anywhere east of UTC (e.g. India) the picker opens on the previous day.
+private fun localDateToPickerMillis(localMillis: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = localMillis }
+
+    return Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(
+            local.get(Calendar.YEAR),
+            local.get(Calendar.MONTH),
+            local.get(Calendar.DAY_OF_MONTH)
+        )
+    }.timeInMillis
+}
+
+private fun pickerMillisToLocalDate(pickerMillis: Long): Long {
+    val utc = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = pickerMillis
+    }
+
+    return Calendar.getInstance().apply {
+        clear()
+        set(
+            utc.get(Calendar.YEAR),
+            utc.get(Calendar.MONTH),
+            utc.get(Calendar.DAY_OF_MONTH)
+        )
     }.timeInMillis
 }
