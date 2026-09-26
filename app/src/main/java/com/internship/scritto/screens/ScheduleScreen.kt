@@ -51,13 +51,13 @@ private data class TimelineItem(
 }
 
 @Composable
-fun ScheduleScreen() {
+fun ScheduleScreen(initialOpen: Boolean = false) {
     val context = LocalContext.current
     val events = ScrittoStore.events
     val tasks = ScrittoStore.tasks
     val today = startOfDay(System.currentTimeMillis())
     var selectedDay by remember { mutableStateOf(today) }
-    var showAdd by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(initialOpen) }
     var deleteEvent by remember { mutableStateOf<ScheduleEvent?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
