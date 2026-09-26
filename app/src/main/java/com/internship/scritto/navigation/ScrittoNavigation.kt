@@ -59,10 +59,12 @@ import com.internship.scritto.ui.splash.ScrittoSplashScreen
 private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
 private const val TASK_ROUTE = "tasks"
-private const val SCHEDULE_ROUTE = "schedule"
+private const val SCHEDULE_ROUTE = "schedule/{openComposer}"
 private const val AI_ROUTE = "ai"
 private const val FILES_ROUTE = "files"
 private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
+
+private fun scheduleRoute(openComposer: Boolean = false) = "schedule/$openComposer"
 
 private data class CreateAction(
     val label: String,
@@ -150,7 +152,8 @@ fun ScrittoNavigation() {
                     },
                     onSchedule = {
                         createMenuExpanded = false
-                        navController.navigate(SCHEDULE_ROUTE) {
+                        selectedDockIndex = -1
+                        navController.navigate(scheduleRoute()) {
                             launchSingleTop = true
                         }
                     },
@@ -186,8 +189,13 @@ fun ScrittoNavigation() {
                 TaskScreen()
             }
 
-            composable(SCHEDULE_ROUTE) {
-                ScheduleScreen()
+            composable(
+                route = SCHEDULE_ROUTE,
+                arguments = listOf(navArgument("openComposer") { type = NavType.BoolType })
+            ) { backStackEntry ->
+                ScheduleScreen(
+                    initialOpen = backStackEntry.arguments?.getBoolean("openComposer") == true
+                )
             }
 
             composable(AI_ROUTE) {
@@ -212,8 +220,8 @@ fun ScrittoNavigation() {
                         navController.navigate("note/${note.id}")
                     },
                     onSchedule = {
-                        selectedDockIndex = 2
-                        navController.navigate(SCHEDULE_ROUTE) {
+                        selectedDockIndex = -1
+                        navController.navigate(scheduleRoute()) {
                             launchSingleTop = true
                         }
                     }
@@ -346,6 +354,11 @@ fun ScrittoNavigation() {
                                                 navController.navigate(TASK_ROUTE) {
                                                     launchSingleTop = true
                                                 }
+                                            }
+                                            "Add Event", "Add Class" -> {
+                                                createMenuExpanded = false
+                                                selectedDockIndex = -1
+                                                navController.navigate(scheduleRoute(true))
                                             }
                                         }
                                     }
