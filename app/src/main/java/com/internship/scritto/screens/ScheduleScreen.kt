@@ -131,33 +131,39 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                         modifier = Modifier.clickable { showDatePicker = true }
                     )
                     Spacer(Modifier.height(7.dp))
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            when (items.size) {
-                                0 -> "Nothing scheduled for this day."
-                                1 -> "1 thing on your schedule."
-                                else -> "${items.size} things on your schedule."
-                            },
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 15.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (!isSameDay(selectedDay, today)) {
-                            Box(
-                                Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
-                                    .clickable { selectedDay = today }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    Text(
+                        when (items.size) {
+                            0 -> "Nothing scheduled for this day."
+                            1 -> "1 thing on your schedule."
+                            else -> "${items.size} things on your schedule."
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 15.sp
+                    )
+                    if (!isSameDay(selectedDay, today)) {
+                        Spacer(Modifier.height(10.dp))
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .clickable { selectedDay = today }
+                                .padding(horizontal = 12.dp, vertical = 7.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                Icon(
+                                    Icons.Outlined.Today,
+                                    contentDescription = "Return to today",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
                                 Text(
                                     "Today",
                                     color = MaterialTheme.colorScheme.primary,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
@@ -207,9 +213,9 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                                         .forEach { letter ->
                                             Text(
                                                 letter.toString(),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = MaterialTheme.colorScheme.primary,
                                                 fontSize = 8.sp,
-                                                fontWeight = FontWeight.SemiBold,
+                                                fontWeight = FontWeight.Bold,
                                                 lineHeight = 8.sp
                                             )
                                         }
