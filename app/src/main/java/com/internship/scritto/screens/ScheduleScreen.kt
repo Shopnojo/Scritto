@@ -131,15 +131,37 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                         modifier = Modifier.clickable { showDatePicker = true }
                     )
                     Spacer(Modifier.height(7.dp))
-                    Text(
-                        when (items.size) {
-                            0 -> "Nothing scheduled for this day."
-                            1 -> "1 thing on your schedule."
-                            else -> "${items.size} things on your schedule."
-                        },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 15.sp
-                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            when (items.size) {
+                                0 -> "Nothing scheduled for this day."
+                                1 -> "1 thing on your schedule."
+                                else -> "${items.size} things on your schedule."
+                            },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 15.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (!isSameDay(selectedDay, today)) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+                                    .clickable { selectedDay = today }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    "Today",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
                 }
                 Box(
                     Modifier.padding(top = 2.dp).size(44.dp).clip(CircleShape)
@@ -162,30 +184,63 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                     val selected = isSameDay(day, selectedDay)
                     val cal = Calendar.getInstance().apply { timeInMillis = day }
                     val monthStart = cal.get(Calendar.DAY_OF_MONTH) == 1
-                    Column(
-                        Modifier.width(54.dp).clip(RoundedCornerShape(18.dp))
-                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
-                            .clickable { selectedDay = startOfDay(day) }
-                            .padding(vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            if (monthStart) SimpleDateFormat("MMM", Locale.getDefault()).format(Date(day)).uppercase()
-                            else SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)).uppercase(),
-                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            cal.get(Calendar.DAY_OF_MONTH).toString(),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 17.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                        )
-                        if (isSameDay(day, today)) {
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (monthStart && index != 0) {
+                            Row(
+                                Modifier.padding(end = 2.dp).height(58.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.width(1.dp).fillMaxHeight()
+                                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Column(
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    SimpleDateFormat("MMM", Locale.getDefault())
+                                        .format(Date(day))
+                                        .uppercase()
+                                        .take(3)
+                                        .forEach { letter ->
+                                            Text(
+                                                letter.toString(),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                lineHeight = 8.sp
+                                            )
+                                        }
+                                }
+                            }
+                        }
+
+                        Column(
+                            Modifier.width(54.dp).clip(RoundedCornerShape(18.dp))
+                                .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
+                                .clickable { selectedDay = startOfDay(day) }
+                                .padding(vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)).uppercase(),
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                             Spacer(Modifier.height(4.dp))
-                            Box(Modifier.size(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                            Text(
+                                cal.get(Calendar.DAY_OF_MONTH).toString(),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 17.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                            )
+                            if (isSameDay(day, today)) {
+                                Spacer(Modifier.height(4.dp))
+                                Box(Modifier.size(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                            }
                         }
                     }
                 }
