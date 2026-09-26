@@ -31,6 +31,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".notifications.EventReminderReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".notifications.TaskReminderBootReceiver"
             android:enabled="true"
             android:exported="true">
