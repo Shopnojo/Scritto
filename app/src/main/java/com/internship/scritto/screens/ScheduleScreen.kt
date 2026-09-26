@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -96,9 +97,22 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
         }
     }.sortedBy { it.time }
 
-    val weekDays = (-2..2).map { offset ->
-        Calendar.getInstance().apply {
-            timeInMillis = selectedDay
+    val dateWindowCenter = 365
+    val dateWindowSize = 3651
+    val dateListState = androidx.compose.foundation.lazy.rememberLazyListState(
+        initialFirstVisibleItemIndex = dateWindowCenter - 2
+    )
+
+    LaunchedEffect(selectedDay) {
+        val offsetFromToday = dayOffset(today, selectedDay)
+        val targetIndex = (dateWindowCenter + offsetFromToday).coerceIn(0, dateWindowSize - 1)
+        dateListState.animateScrollToItem(targetIndex.coerceAtLeast(0), scrollOffset = -36)
+    }
+
+    fun dateAt(index: Int): Long {
+        val offset = index - dateWindowCenter
+        return Calendar.getInstance().apply {
+            timeInMillis = today
             add(Calendar.DAY_OF_YEAR, offset)
         }.timeInMillis
     }
@@ -130,17 +144,24 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                 Box(
                     Modifier.padding(top = 2.dp).size(44.dp).clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                        .clickable { showAdd = true },
+                        .clickable(enabled = !isBeforeToday(selectedDay, today)) { if (!isBeforeToday(selectedDay, today)) showAdd = true },
                     contentAlignment = Alignment.Center
                 ) { Icon(Icons.Outlined.Add, "Add to schedule", tint = MaterialTheme.colorScheme.primary) }
             }
 
             Spacer(Modifier.height(24.dp))
 
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                weekDays.forEach { day ->
+            LazyRow(
+                state = dateListState,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp)
+            ) {
+                items(dateWindowSize) { index ->
+                    val day = dateAt(index)
                     val selected = isSameDay(day, selectedDay)
                     val cal = Calendar.getInstance().apply { timeInMillis = day }
+                    val monthStart = cal.get(Calendar.DAY_OF_MONTH) == 1
                     Column(
                         Modifier.width(54.dp).clip(RoundedCornerShape(18.dp))
                             .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
@@ -149,13 +170,19 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)).uppercase(),
+                            if (monthStart) SimpleDateFormat("MMM", Locale.getDefault()).format(Date(day)).uppercase()
+                            else SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)).uppercase(),
                             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text(cal.get(Calendar.DAY_OF_MONTH).toString(), color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                        Text(
+                            cal.get(Calendar.DAY_OF_MONTH).toString(),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 17.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                        )
                         if (isSameDay(day, today)) {
                             Spacer(Modifier.height(4.dp))
                             Box(Modifier.size(5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
@@ -179,7 +206,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
             }
 
             if (items.isEmpty()) {
-                ScheduleEmptyState { showAdd = true }
+                ScheduleEmptyState(canAdd = !isBeforeToday(selectedDay, today)) { showAdd = true }
             } else {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item { Text("TODAY'S FLOW", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp) }
@@ -196,6 +223,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
             AddSchedulePanel(
                 context = context,
                 initialDate = selectedDay,
+                today = today,
                 onDismiss = { showAdd = false },
                 onCreated = {
                     showAdd = false
@@ -278,7 +306,7 @@ private fun TimelineRow(item: TimelineItem, onDelete: () -> Unit) {
 }
 
 @Composable
-private fun ScheduleEmptyState(onAdd: () -> Unit) {
+private fun ScheduleEmptyState(canAdd: Boolean, onAdd: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 36.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Outlined.Schedule, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), modifier = Modifier.size(42.dp))
         Spacer(Modifier.height(14.dp))
@@ -286,12 +314,16 @@ private fun ScheduleEmptyState(onAdd: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text("Add an event or class to shape the day.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
         Spacer(Modifier.height(16.dp))
-        Text("Add to schedule", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onAdd))
+        if (canAdd) {
+            Text("Add to schedule", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onAdd))
+        } else {
+            Text("Past date • view only", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        }
     }
 }
 
 @Composable
-private fun AddSchedulePanel(context: Context, initialDate: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
+private fun AddSchedulePanel(context: Context, initialDate: Long, today: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
     var title by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(initialDate) }
@@ -300,12 +332,19 @@ private fun AddSchedulePanel(context: Context, initialDate: Long, onDismiss: () 
     var endHour by remember { mutableStateOf<Int?>(null) }
     var endMinute by remember { mutableStateOf<Int?>(null) }
     var type by remember { mutableStateOf(ScheduleEvent.Type.EVENT) }
-    var repeatWeekly by remember { mutableStateOf(false) }
+    var cyclic by remember { mutableStateOf(false) }
+    var recurrenceUnit by remember { mutableStateOf("Weeks") }
+    var recurrenceCount by remember { mutableStateOf("8") }
     var datePicker by remember { mutableStateOf(false) }
     var startPicker by remember { mutableStateOf(false) }
     var endPicker by remember { mutableStateOf(false) }
 
-    val canCreate = title.isNotBlank() && startHour != null && startMinute != null && endHour != null && endMinute != null
+    val recurrenceValue = recurrenceCount.toIntOrNull() ?: 0
+    val canCreate = title.isNotBlank() &&
+        startHour != null && startMinute != null &&
+        endHour != null && endMinute != null &&
+        !isBeforeToday(date, today) &&
+        (!cyclic || recurrenceValue > 0)
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.78f)).clickable { onDismiss() }, contentAlignment = Alignment.BottomCenter) {
         Column(
@@ -333,15 +372,47 @@ private fun AddSchedulePanel(context: Context, initialDate: Long, onDismiss: () 
                 ScheduleChoice("15 min reminder", true, Modifier.weight(1f)) {}
             }
 
-            if (type == ScheduleEvent.Type.CLASS) {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                        .clickable { repeatWeekly = !repeatWeekly }.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(if (repeatWeekly) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Repeat weekly", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+            if (isBeforeToday(date, today)) {
+                Text(
+                    "Past dates can be viewed, but new events and classes can only be created for today or later.",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                    .clickable { cyclic = !cyclic }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (cyclic) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Cyclic", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Repeat at the same time on the same weekday", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                }
+            }
+
+            if (cyclic) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ScheduleChoice("Weeks", recurrenceUnit == "Weeks", Modifier.weight(1f)) { recurrenceUnit = "Weeks" }
+                    ScheduleChoice("Months", recurrenceUnit == "Months", Modifier.weight(1f)) { recurrenceUnit = "Months" }
+                    OutlinedTextField(
+                        value = recurrenceCount,
+                        onValueChange = { recurrenceCount = it.filter(Char::isDigit).take(3) },
+                        label = { Text("For") },
+                        singleLine = true,
+                        modifier = Modifier.width(88.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    )
                 }
             }
 
@@ -353,20 +424,44 @@ private fun AddSchedulePanel(context: Context, initialDate: Long, onDismiss: () 
 
             Button(
                 onClick = {
+                    if (isBeforeToday(date, today)) return@Button
                     val start = buildDateTime(date, startHour!!, startMinute!!)
                     val endBase = buildDateTime(date, endHour!!, endMinute!!)
                     val end = if (endBase <= start) endBase + DAY_MILLIS else endBase
-                    val count = if (type == ScheduleEvent.Type.CLASS && repeatWeekly) 8 else 1
-                    repeat(count) { index ->
-                        val offset = index * 7L * DAY_MILLIS
-                        ScrittoStore.createScheduleEvent(context, title, location, start + offset, end + offset, type, 15)
+                    val durationEnd = if (cyclic) {
+                        if (recurrenceUnit == "Weeks") {
+                            start + recurrenceValue * 7L * DAY_MILLIS
+                        } else {
+                            Calendar.getInstance().apply {
+                                timeInMillis = start
+                                add(Calendar.MONTH, recurrenceValue)
+                            }.timeInMillis
+                        }
+                    } else {
+                        start
+                    }
+
+                    var occurrence = start
+                    while (occurrence < durationEnd || !cyclic) {
+                        val occurrenceEnd = end + (occurrence - start)
+                        ScrittoStore.createScheduleEvent(
+                            context,
+                            title,
+                            location,
+                            occurrence,
+                            occurrenceEnd,
+                            type,
+                            15
+                        )
+                        if (!cyclic) break
+                        occurrence += 7L * DAY_MILLIS
                     }
                     onCreated()
                 },
                 enabled = canCreate,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
-            ) { Text(if (repeatWeekly) "Add class series" else "Add to schedule", fontWeight = FontWeight.SemiBold) }
+            ) { Text(if (cyclic) "Add cyclic series" else "Add to schedule", fontWeight = FontWeight.SemiBold) }
         }
     }
 
@@ -418,6 +513,15 @@ private fun buildDateTime(date: Long, hour: Int, minute: Int): Long = Calendar.g
 private fun formatTime(hour: Int, minute: Int): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute) }.time)
 
 private fun formatScheduleDate(timestamp: Long): String = SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date(timestamp))
+
+private fun dayOffset(from: Long, to: Long): Int {
+    val fromCalendar = Calendar.getInstance().apply { timeInMillis = startOfDay(from) }
+    val toCalendar = Calendar.getInstance().apply { timeInMillis = startOfDay(to) }
+    return ((toCalendar.timeInMillis - fromCalendar.timeInMillis) / DAY_MILLIS).toInt()
+}
+
+private fun isBeforeToday(timestamp: Long, today: Long): Boolean =
+    startOfDay(timestamp) < startOfDay(today)
 
 private fun isSameDay(first: Long, second: Long): Boolean {
     val a = Calendar.getInstance().apply { timeInMillis = first }
