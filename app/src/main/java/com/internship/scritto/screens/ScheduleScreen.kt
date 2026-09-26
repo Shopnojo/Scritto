@@ -58,9 +58,18 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
     val today = startOfDay(System.currentTimeMillis())
     var selectedDay by remember { mutableStateOf(today) }
     var showAdd by remember { mutableStateOf(initialOpen) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
     var deleteEvent by remember { mutableStateOf<ScheduleEvent?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = System.currentTimeMillis()
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
 
     val endOfDay = selectedDay + DAY_MILLIS
     val dayEvents = events.filter { it.startAt < endOfDay && it.endAt > selectedDay }.sortedBy { it.startAt }
@@ -104,7 +113,8 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
                         SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date(selectedDay)),
                         color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 30.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { showDatePicker = true }
                     )
                     Spacer(Modifier.height(7.dp))
                     Text(
@@ -157,7 +167,7 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
             Spacer(Modifier.height(24.dp))
 
             if (isSameDay(selectedDay, today)) {
-                val nowText = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+                val nowText = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(currentTime))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
                     Spacer(Modifier.width(8.dp))
@@ -210,6 +220,20 @@ fun ScheduleScreen(initialOpen: Boolean = false) {
             )
         }
     }
+    if (showDatePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = selectedDay)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { selectedDay = startOfDay(it) }
+                    showDatePicker = false
+                }) { Text("Done") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = state, showModeToggle = false) }
+    }
+
 }
 
 @Composable
