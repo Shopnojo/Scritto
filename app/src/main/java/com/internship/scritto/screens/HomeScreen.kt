@@ -85,6 +85,21 @@ fun HomeScreen(
         .take(3)
     val dashboardScrollState = rememberScrollState()
 
+    var currentGreeting by remember {
+        mutableStateOf(greeting())
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = java.util.Calendar.getInstance()
+            val millisUntilNextMinute =
+                60_000L - (now.timeInMillis % 60_000L)
+
+            delay(millisUntilNextMinute)
+            currentGreeting = greeting()
+        }
+    }
+
     var commandText by remember {
         mutableStateOf("")
     }
@@ -107,7 +122,7 @@ fun HomeScreen(
         // ================================================================
 
         Text(
-            text = greeting(),
+            text = currentGreeting,
             color = ScrittoCreamBright,
             fontSize = 34.sp,
             lineHeight = 40.sp,
