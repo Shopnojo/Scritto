@@ -85,8 +85,8 @@ fun HomeScreen(
         .take(3)
     val dashboardScrollState = rememberScrollState()
 
-    var currentGreeting by remember {
-        mutableStateOf(greeting())
+    var greetingContent by remember {
+        mutableStateOf(greetingContent())
     }
 
     LaunchedEffect(Unit) {
@@ -96,7 +96,7 @@ fun HomeScreen(
                 60_000L - (now.timeInMillis % 60_000L)
 
             delay(millisUntilNextMinute)
-            currentGreeting = greeting()
+            greetingContent = greetingContent()
         }
     }
 
@@ -122,7 +122,7 @@ fun HomeScreen(
         // ================================================================
 
         Text(
-            text = currentGreeting,
+            text = greetingContent.first,
             color = ScrittoCreamBright,
             fontSize = 34.sp,
             lineHeight = 40.sp,
@@ -134,7 +134,7 @@ fun HomeScreen(
         )
 
         Text(
-            text = "What are we working on?",
+            text = greetingContent.second,
             color = ScrittoTextSecondary,
             fontSize = 17.sp,
             lineHeight = 24.sp
@@ -632,13 +632,13 @@ private fun RecentNoteCard(
 // GREETING
 // ========================================================================
 
-private fun greeting(): String {
+private fun greetingContent(): Pair<String, String> {
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
 
     return when (hour) {
-        in 5..11 -> "Good morning..."
-        in 12..16 -> "Good afternoon..."
-        in 17..21 -> "Good evening..."
-        else -> "Late Night..."
+        in 5..11 -> "Good morning..." to "What are we working on?"
+        in 12..16 -> "Good afternoon..." to "Ready to get some things done?"
+        in 17..21 -> "Good evening..." to "Let's wrap up the day."
+        else -> "Late night..." to "Still working, huh? 👀"
     }
 }
