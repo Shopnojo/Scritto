@@ -30,3 +30,16 @@ Thumbs.db
 .idea/misc.xml
 .idea/deploymentTargetDropDown.xml
 .idea/other.xml
+
+# Secrets and signing (never commit these)
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+keystore.properties
+
+# Build outputs
+*.apk
+*.aab
+

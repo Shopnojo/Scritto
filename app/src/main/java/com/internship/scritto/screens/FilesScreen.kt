@@ -5,6 +5,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,8 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.Button
@@ -39,6 +42,8 @@ import com.internship.scritto.ui.theme.ScrittoCream
 import com.internship.scritto.ui.theme.ScrittoCreamBright
 import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
+import android.widget.Toast
+import androidx.core.net.toUri
 import com.internship.scritto.data.repository.ScrittoStore
 
 @Composable
@@ -189,9 +194,34 @@ fun FilesScreen() {
                                     ScrittoBorder,
                                     RoundedCornerShape(16.dp)
                                 )
+                                .clickable {
+                                    // Open the file in whatever app handles it.
+                                    val opened = runCatching {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(
+                                                    file.uri.toUri(),
+                                                    context.contentResolver.getType(file.uri.toUri())
+                                                        ?: "*/*"
+                                                )
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                        )
+                                    }
+
+                                    if (opened.isFailure) {
+                                        Toast.makeText(
+                                            context,
+                                            "No app can open this file",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
                                 .padding(
-                                    horizontal = 16.dp,
-                                    vertical = 15.dp
+                                    start = 16.dp,
+                                    end = 6.dp,
+                                    top = 8.dp,
+                                    bottom = 8.dp
                                 ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -212,6 +242,23 @@ fun FilesScreen() {
                                     .padding(start = 14.dp)
                                     .weight(1f)
                             )
+
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        ScrittoStore.removeImportedFile(file.uri)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Remove file",
+                                    tint = ScrittoTextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
