@@ -318,21 +318,115 @@ private fun OfficeDocumentPreview(descriptor: DocumentDescriptor) {
         }
     }
 
+    if (text == "Loading document…") {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Loading document…", color = ScrittoTextSecondary)
+        }
+        return
+    }
+
+    val rows = remember(text, descriptor.kind) {
+        text.lineSequence()
+            .filter { it.isNotEmpty() }
+            .map { line ->
+                if (descriptor.kind == DocumentKind.CSV) {
+                    parsePreviewCsvRow(line)
+                } else {
+                    line.split("    ")
+                }
+            }
+            .toList()
+    }
+    val columnCount = rows.maxOfOrNull { it.size } ?: 0
+
     Box(
         Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
             .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp))
-            .padding(18.dp)
-            .verticalScroll(rememberScrollState())
+            .clip(RoundedCornerShape(20.dp))
     ) {
-        Text(
-            text.ifBlank { "This document contains no directly previewable text." },
-            color = ScrittoCream,
-            fontSize = 14.sp,
-            lineHeight = 21.sp
-        )
+        if (rows.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "This document contains no directly previewable data.",
+                    color = ScrittoTextSecondary
+                )
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState())
+                    .padding(12.dp)
+            ) {
+                rows.forEachIndexed { rowIndex, row ->
+                    Row {
+                        repeat(columnCount) { columnIndex ->
+                            val value = row.getOrNull(columnIndex).orEmpty()
+                            Box(
+                                Modifier
+                                    .width(150.dp)
+                                    .heightIn(min = 44.dp)
+                                    .background(
+                                        if (rowIndex == 0) {
+                                            ScrittoAmber.copy(alpha = 0.12f)
+                                        } else {
+                                            ScrittoSurface.copy(alpha = 0.72f)
+                                        }
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    value,
+                                    color = if (rowIndex == 0) ScrittoCreamBright else ScrittoCream,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (rowIndex == 0) FontWeight.SemiBold else FontWeight.Normal,
+                                    maxLines = 3,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+}
+
+private fun parsePreviewCsvRow(line: String): List<String> {
+    val result = mutableListOf<String>()
+    val current = StringBuilder()
+    var quoted = false
+    var index = 0
+    while (index < line.length) {
+        val char = line[index]
+        when {
+            char == '"' -> {
+                if (quoted && index + 1 < line.length && line[index + 1] == '"') {
+                    current.append('"')
+                    index++
+                } else {
+                    quoted = !quoted
+                }
+            }
+            char == ',' && !quoted -> {
+                result += current.toString()
+                current.clear()
+            }
+            else -> current.append(char)
+        }
+        index++
+    }
+    result += current.toString()
+    return result
 }
 
 @Composable
