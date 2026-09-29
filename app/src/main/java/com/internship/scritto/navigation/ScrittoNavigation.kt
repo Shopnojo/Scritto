@@ -1,5 +1,7 @@
 package com.internship.scritto.navigation
 
+import android.net.Uri
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -56,6 +58,7 @@ import com.internship.scritto.screens.FilesScreen
 import com.internship.scritto.screens.NotesScreen
 import com.internship.scritto.screens.ScheduleScreen
 import com.internship.scritto.screens.TaskScreen
+import com.internship.scritto.screens.DocumentPreviewScreen
 import com.internship.scritto.ui.splash.ScrittoSplashScreen
 
 private const val HOME_ROUTE = "home"
@@ -65,6 +68,7 @@ private const val SCHEDULE_ROUTE = "schedule/{openComposer}"
 private const val AI_ROUTE = "ai"
 private const val FILES_ROUTE = "files"
 private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
+private const val DOCUMENT_ROUTE = "document/{name}/{uri}"
 
 private fun scheduleRoute(openComposer: Boolean = false) = "schedule/$openComposer"
 
@@ -197,7 +201,31 @@ fun ScrittoNavigation() {
             }
 
             composable(FILES_ROUTE) {
-                FilesScreen()
+                FilesScreen(
+                    onFileSelected = { file ->
+                        navController.navigate(
+                            "document/" + Uri.encode(file.name) + "/" + Uri.encode(file.uri)
+                        )
+                    }
+                )
+            }
+
+            composable(
+                route = DOCUMENT_ROUTE,
+                arguments = listOf(
+                    navArgument("name") { type = NavType.StringType },
+                    navArgument("uri") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val name = backStackEntry.arguments?.getString("name")
+                val uri = backStackEntry.arguments?.getString("uri")
+                if (name != null && uri != null) {
+                    DocumentPreviewScreen(
+                        name = name,
+                        uri = uri,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
             }
 
             composable(NOTES_ROUTE) {
