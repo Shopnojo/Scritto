@@ -47,7 +47,7 @@ import androidx.core.net.toUri
 import com.internship.scritto.data.repository.ScrittoStore
 
 @Composable
-fun FilesScreen() {
+fun FilesScreen(onFileSelected: (ScrittoStore.ImportedFile) -> Unit = {}) {
     val context = LocalContext.current
     val importedFiles = ScrittoStore.importedFiles
 
@@ -195,27 +195,7 @@ fun FilesScreen() {
                                     RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
-                                    // Open the file in whatever app handles it.
-                                    val opened = runCatching {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW).apply {
-                                                setDataAndType(
-                                                    file.uri.toUri(),
-                                                    context.contentResolver.getType(file.uri.toUri())
-                                                        ?: "*/*"
-                                                )
-                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                            }
-                                        )
-                                    }
-
-                                    if (opened.isFailure) {
-                                        Toast.makeText(
-                                            context,
-                                            "No app can open this file",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
+                                    onFileSelected(file)
                                 }
                                 .padding(
                                     start = 16.dp,
