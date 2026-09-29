@@ -140,6 +140,7 @@ fun DocumentEditorScreen(
 
             when {
                 descriptor.kind == DocumentKind.IMAGE -> ImageEditorBody(
+                    modifier = Modifier.weight(1f),
                     cropRatio = cropRatio,
                     customRatio = customRatio,
                     rotation = imageRotation,
@@ -152,11 +153,13 @@ fun DocumentEditorScreen(
                     onFlipV = { flipV = !flipV }
                 )
                 descriptor.kind == DocumentKind.PDF && !convertMode -> PdfEditBody(
+                    modifier = Modifier.weight(1f),
                     text = text,
                     onText = { text = it },
                     onSave = { saveEdited() }
                 )
                 else -> TextEditBody(
+                    modifier = Modifier.weight(1f),
                     text = text,
                     loaded = loaded,
                     onText = { text = it }
@@ -204,14 +207,13 @@ fun DocumentEditorScreen(
 
 @Composable
 private fun TextEditBody(
+    modifier: Modifier,
     text: String,
     loaded: Boolean,
     onText: (String) -> Unit
 ) {
     Box(
-        Modifier
-            .fillMaxWidth()
-            .weight(1f)
+        modifier.fillMaxWidth()
             .padding(horizontal = 20.dp)
             .background(ScrittoSurface.copy(alpha = 0.58f), RoundedCornerShape(20.dp))
             .padding(12.dp)
@@ -244,14 +246,13 @@ private fun TextEditBody(
 
 @Composable
 private fun PdfEditBody(
+    modifier: Modifier,
     text: String,
     onText: (String) -> Unit,
     onSave: () -> Unit
 ) {
     Column(
-        Modifier
-            .fillMaxWidth()
-            .weight(1f)
+        modifier.fillMaxWidth()
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -282,6 +283,7 @@ private fun PdfEditBody(
 
 @Composable
 private fun ImageEditorBody(
+    modifier: Modifier,
     cropRatio: String,
     customRatio: String,
     rotation: Float,
@@ -294,9 +296,7 @@ private fun ImageEditorBody(
     onFlipV: () -> Unit
 ) {
     Column(
-        Modifier
-            .fillMaxWidth()
-            .weight(1f)
+        modifier.fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
