@@ -67,7 +67,7 @@ object DocumentEngine {
         when (descriptor.kind) {
             DocumentKind.CSV -> output.write(text.toByteArray(StandardCharsets.UTF_8))
             DocumentKind.DOCX -> writeDocx(context, descriptor.uri.toUri(), text, output)
-            DocumentKind.XLSX -> writeXlsxFromCsv(text, output)
+            DocumentKind.XLSX -> writeXlsx(context, descriptor.uri.toUri(), text, output)
             DocumentKind.PDF -> writePdfText(context, descriptor.uri.toUri(), text, output)
             else -> output.write(text.toByteArray(StandardCharsets.UTF_8))
         }
@@ -200,6 +200,33 @@ object DocumentEngine {
                 doc.paragraphs.joinToString("\n") { it.text }
             }
         }.orEmpty()
+
+    private fun writeXlsx(
+        context: Context,
+        sourceUri: Uri,
+        text: String,
+        output: OutputStream
+    ) {
+        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+            XSSFWorkbook(input).use { workbook ->
+                val sheet = workbook.getSheetAt(0)
+                while (sheet.lastRowNum >= 0) {
+                    val row = sheet.getRow(sheet.lastRowNum) ?: break
+                    sheet.removeRow(row)
+                    if (sheet.lastRowNum == 0 && sheet.getRow(0) == null) break
+                }
+
+                text.replace("\r\n", "\n").split("\n").forEachIndexed { rowIndex, line ->
+                    val row = sheet.getRow(rowIndex) ?: sheet.createRow(rowIndex)
+                    parseCsvLine(line).forEachIndexed { columnIndex, value ->
+                        row.getCell(columnIndex) ?: row.createCell(columnIndex)
+                        row.getCell(columnIndex).setCellValue(value)
+                    }
+                }
+                workbook.write(output)
+            }
+        } ?: writeXlsxFromCsv(text, output)
+    }
 
     private fun writeXlsxFromCsv(text: String, output: OutputStream) {
         XSSFWorkbook().use { workbook ->
