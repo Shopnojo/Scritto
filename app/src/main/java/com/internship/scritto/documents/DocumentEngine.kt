@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.net.Uri
+import androidx.core.net.toUri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -288,7 +289,7 @@ object DocumentEngine {
 
     private fun csvEscape(value: String): String =
         if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-            """ + value.replace(""", """") + """
+            "\"" + value.replace("\"", "\\"") + "\""
         } else value
 
     private fun writePdfText(
