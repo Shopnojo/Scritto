@@ -68,6 +68,6 @@ object DocumentReader {
     }
 
     private fun decodeXml(value: String): String =
-        value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", """)
+        value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
             .replace("&apos;", "'").replace("&amp;", "&")
 }
