@@ -44,7 +44,9 @@ import kotlinx.coroutines.withContext
 fun DocumentPreviewScreen(
     name: String,
     uri: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onEdit: () -> Unit = {},
+    onConvert: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val descriptor = remember(name, uri) { DocumentTypes.describe(name, uri) }
@@ -76,8 +78,8 @@ fun DocumentPreviewScreen(
 
             DocumentBottomBar(
                 descriptor = descriptor,
-                onEdit = { actionsOpen = true },
-                onConvert = { actionsOpen = true },
+                onEdit = onEdit,
+                onConvert = onConvert,
                 onShare = {
                     shareUri(context, descriptor.uri.toUri(), descriptor.name)
                 },
