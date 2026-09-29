@@ -58,7 +58,7 @@ object CodeSyntax {
                 val style = when {
                     value.startsWith("//") || value.startsWith("/*") || value.startsWith("#") ->
                         SpanStyle(color = commentColor)
-                    value.startsWith(""") || value.startsWith("'") -> SpanStyle(color = stringColor)
+                    value.startsWith("\"") || value.startsWith("'") -> SpanStyle(color = stringColor)
                     value.firstOrNull()?.isDigit() == true -> SpanStyle(color = numberColor)
                     keywordRegex?.matches(value) == true -> SpanStyle(color = keywordColor)
                     value.firstOrNull()?.isUpperCase() == true -> SpanStyle(color = typeColor)
