@@ -75,7 +75,7 @@ object DocumentReader {
                     else ->
                         Regex("<t[^>]*>([\\s\\S]*?)</t>").find(cell)
                             ?.groupValues?.getOrNull(1)
-                            ?.let(::decodeXml)
+                            ?.let { text -> decodeXml(text) }
                             .orEmpty()
                 }
             }
