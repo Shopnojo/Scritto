@@ -14,20 +14,28 @@ object DocumentReader {
         }.orEmpty()
 
     fun readOfficeText(context: Context, uri: Uri, kind: DocumentKind): String {
-        val preferred = if (kind == DocumentKind.DOCX) "word/document.xml" else "xl/worksheets/sheet1.xml"
-        val entries = linkedMapOf<String, String>()
+        val preferred = if (kind == DocumentKind.DOCX) {
+            "word/document.xml"
+        } else {
+            "xl/worksheets/sheet1.xml"
+        }
+
+        val entries = mutableMapOf<String, String>()
+
         context.contentResolver.openInputStream(uri)?.use { input ->
             ZipInputStream(input).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
-                    if (!entry.isDirectory && (entry.name == preferred ||
-                        entry.name == "xl/sharedStrings.xml")) {
+                    if (!entry.isDirectory &&
+                        (entry.name == preferred || entry.name == "xl/sharedStrings.xml")
+                    ) {
                         entries[entry.name] = zip.bufferedReader(StandardCharsets.UTF_8).readText()
                     }
                     zip.closeEntry()
                 }
             }
         }
+
         return if (kind == DocumentKind.DOCX) {
             xmlToReadableText(entries[preferred].orEmpty())
         } else {
@@ -38,36 +46,61 @@ object DocumentReader {
         }
     }
 
-    private fun extractSharedStrings(xml: String): List<String> =
-        Regex("<si[\\s\\S]*?</si>").findAll(xml).map { block ->
-            Regex("<t[^>]*>([\\s\\S]*?)</t>").findAll(block.value)
-                .joinToString("") { decodeXml(it.groupValues[1]) }
-        }.toList()
+    private fun extractSharedStrings(xml: String): List<String> {
+        val result = mutableListOf<String>()
+        val items = Regex("<si[\\s\\S]*?</si>").findAll(xml)
+        for (item in items) {
+            val texts = Regex("<t[^>]*>([\\s\\S]*?)</t>").findAll(item.value)
+            result += texts.joinToString("") { decodeXml(it.groupValues[1]) }
+        }
+        return result
+    }
 
-    private fun xmlToSheetText(xml: String, shared: List<String>): String =
-        Regex("<row[\\s\\S]*?</row>").findAll(xml).joinToString("\n") { row ->
-            Regex("<c[\\s\\S]*?</c>").findAll(row.value).joinToString("    ") { cell ->
-                val type = Regex("t=\"([^\"]+)\"").find(cell.value)?.groupValues?.getOrNull(1)
-                val value = Regex("<v[^>]*>([\\s\\S]*?)</v>").find(cell.value)?.groupValues?.getOrNull(1)
+    private fun xmlToSheetText(xml: String, shared: List<String>): String {
+        if (xml.isBlank()) return ""
+
+        val rows = Regex("<row[\\s\\S]*?</row>").findAll(xml)
+        return rows.joinToString("\n") { rowMatch ->
+            val cells = Regex("<c[\\s\\S]*?</c>").findAll(rowMatch.value)
+            cells.joinToString("    ") { cellMatch ->
+                val cell = cellMatch.value
+                val type = Regex("t=\"([^\"]+)\"").find(cell)?.groupValues?.getOrNull(1)
+                val value = Regex("<v[^>]*>([\\s\\S]*?)</v>").find(cell)
+                    ?.groupValues?.getOrNull(1)
+
                 when {
-                    type == "s" && value != null -> shared.getOrNull(value.toIntOrNull() ?: -1).orEmpty()
+                    type == "s" && value != null ->
+                        shared.getOrNull(value.toIntOrNull() ?: -1).orEmpty()
                     value != null -> decodeXml(value)
-                    else -> Regex("<t[^>]*>([\\s\\S]*?)</t>").find(cell.value)
-                        ?.groupValues?.getOrNull(1)?.let(::decodeXml).orEmpty()
+                    else ->
+                        Regex("<t[^>]*>([\\s\\S]*?)</t>").find(cell)
+                            ?.groupValues?.getOrNull(1)
+                            ?.let(::decodeXml)
+                            .orEmpty()
                 }
             }
         )
+    }
 
     private fun xmlToReadableText(xml: String): String {
-        val broken = xml.replace(Regex("</w:p>"), "\n")
+        if (xml.isBlank()) return ""
+
+        val broken = xml
+            .replace(Regex("</w:p>"), "\n")
             .replace(Regex("</w:tr>"), "\n")
             .replace(Regex("</w:tc>"), "    ")
             .replace(Regex("<w:tab[^>]*/>"), "\t")
+
         return decodeXml(Regex("<[^>]+>").replace(broken, ""))
-            .replace(Regex("\n{3,}"), "\n\n").trim()
+            .replace(Regex("\n{3,}"), "\n\n")
+            .trim()
     }
 
     private fun decodeXml(value: String): String =
-        value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
-            .replace("&apos;", "'").replace("&amp;", "&")
+        value
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&apos;", "'")
+            .replace("&amp;", "&")
 }
