@@ -8,7 +8,8 @@ object CodeFormatter {
         if (!shouldAutoAlign(lines)) return source.replace("\r\n", "\n")
 
         val normalized = when (language) {
-            "Python", "Ruby" -> indentBlockLanguage(lines)
+            "Python" -> indentPython(lines)
+            "Ruby" -> indentRuby(lines)
             "C", "C++", "Java", "Kotlin", "JavaScript", "JavaScript React",
             "TypeScript", "TypeScript React", "Go", "Rust", "Swift", "C#",
             "PHP", "Dart", "Scala", "Groovy", "Objective-C", "Objective-C++",
@@ -51,20 +52,48 @@ object CodeFormatter {
         }
     }
 
-    private fun indentBlockLanguage(lines: List<String>): List<String> {
+    private fun indentPython(lines: List<String>): List<String> {
         var level = 0
         return lines.map { raw ->
             val line = raw.trim()
             if (line.isEmpty()) return@map ""
-            if (line.startsWith("return ") || line.startsWith("break") ||
-                line.startsWith("continue") || line.startsWith("raise") ||
-                line.startsWith("pass") || line.startsWith("else") ||
-                line.startsWith("elif") || line.startsWith("except") ||
-                line.startsWith("finally")
-            ) level = (level - 1).coerceAtLeast(0)
+
+            val dedent = line.startsWith("else:") ||
+                line.startsWith("elif ") ||
+                line.startsWith("except") ||
+                line.startsWith("finally:") ||
+                line.startsWith("case ")
+
+            if (dedent) level = (level - 1).coerceAtLeast(0)
+
             val result = "    ".repeat(level) + line
             if (line.endsWith(":") && !line.startsWith("#")) level++
-            if (line == "end") level = (level - 1).coerceAtLeast(0)
+            result
+        }
+    }
+
+    private fun indentRuby(lines: List<String>): List<String> {
+        var level = 0
+        return lines.map { raw ->
+            val line = raw.trim()
+            if (line.isEmpty()) return@map ""
+
+            val dedent = line == "end" ||
+                line == "else" ||
+                line == "elsif" ||
+                line.startsWith("elsif ") ||
+                line == "rescue" ||
+                line.startsWith("rescue ") ||
+                line == "ensure" ||
+                line.startsWith("when ")
+
+            if (dedent) level = (level - 1).coerceAtLeast(0)
+
+            val result = "    ".repeat(level) + line
+
+            val opens = line.matches(Regex("^(class|module|def|if|unless|case|begin|for|while|until)\\b.*")) ||
+                line.endsWith(" do") || line.endsWith(" do |")
+            if (opens && line != "end") level++
             result
         }
     }

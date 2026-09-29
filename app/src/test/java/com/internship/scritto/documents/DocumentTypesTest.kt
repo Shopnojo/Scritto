@@ -26,4 +26,22 @@ class DocumentTypesTest {
         assertEquals(source.lines().size, aligned.lines().size)
         assertTrue(aligned.lines()[1].startsWith("    "))
     }
+
+    @Test
+    fun alignsPythonBlocksWithoutMovingReturnOrBreakStatements() {
+        val source = "def greet():\nprint('hi')\nreturn True"
+        val aligned = CodeFormatter.alignForDisplay(source, "Python")
+        assertEquals("    print('hi')", aligned.lines()[1])
+        assertEquals("    return True", aligned.lines()[2])
+    }
+
+    @Test
+    fun alignsRubyBlocksWithEndAndElse() {
+        val source = "def greet\nputs 'hi'\nelse\nputs 'fallback'\nend"
+        val aligned = CodeFormatter.alignForDisplay(source, "Ruby")
+        assertEquals("    puts 'hi'", aligned.lines()[1])
+        assertEquals("else", aligned.lines()[2])
+        assertEquals("    puts 'fallback'", aligned.lines()[3])
+        assertEquals("end", aligned.lines()[4])
+    }
 }
