@@ -19,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalContext
+import java.io.OutputStream
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
@@ -50,7 +52,7 @@ fun DocumentEditorScreen(
     var customRatio by remember(descriptor.uri) { mutableStateOf("") }
     var conversionOpen by remember { mutableStateOf(convertMode) }
     var status by remember { mutableStateOf<String?>(null) }
-    var pendingOperation by remember { mutableStateOf<((Uri) -> Unit)?>(null) }
+    var pendingOperation by remember { mutableStateOf<((OutputStream) -> Unit)?>(null) }
 
     val saveLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("*/*")
@@ -60,7 +62,7 @@ fun DocumentEditorScreen(
             pendingOperation = null
             if (operation != null) {
                 runCatching {
-                    context.contentResolver.openOutputStream(destination)?.use(operation)
+                    context.contentResolver.openOutputStream(destination)?.use { output -> operation(output) }
                     status = "Saved"
                 }.onFailure {
                     status = "Could not save: " + (it.message ?: "unknown error")
@@ -80,28 +82,23 @@ fun DocumentEditorScreen(
 
     fun saveEdited() {
         val extension = name.substringAfterLast('.', "txt")
-        pendingOperation = { target ->
-            context.contentResolver.openOutputStream(target)?.use { output ->
-                DocumentEngine.saveEditedText(context, descriptor, text, output)
-            }
+        pendingOperation = { output ->
+            DocumentEngine.saveEditedText(context, descriptor, text, output)
         }
         saveLauncher.launch(name.substringBeforeLast('.', name) + "_edited." + extension)
     }
 
     fun convertTo(extension: String) {
-        pendingOperation = { target ->
-            context.contentResolver.openOutputStream(target)?.use { output ->
-                DocumentEngine.convert(context, descriptor, extension, output)
-            }
+        pendingOperation = { output ->
+            DocumentEngine.convert(context, descriptor, extension, output)
         }
         saveLauncher.launch(name.substringBeforeLast('.', name) + "." + extension)
     }
 
     fun saveImage() {
         val ratio = cropRatioValue(cropRatio, customRatio)
-        pendingOperation = { target ->
-            context.contentResolver.openOutputStream(target)?.use { output ->
-                DocumentEngine.transformImage(
+        pendingOperation = { output ->
+            DocumentEngine.transformImage(
                     context = context,
                     descriptor = descriptor,
                     output = output,
@@ -110,8 +107,7 @@ fun DocumentEditorScreen(
                     flipHorizontal = flipH,
                     flipVertical = flipV,
                     format = Bitmap.CompressFormat.PNG
-                )
-            }
+            )
         }
         saveLauncher.launch(name.substringBeforeLast('.', name) + "_edited.png")
     }
