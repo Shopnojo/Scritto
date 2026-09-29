@@ -310,7 +310,11 @@ private fun OfficeDocumentPreview(descriptor: DocumentDescriptor) {
 
     LaunchedEffect(descriptor.uri) {
         text = withContext(Dispatchers.IO) {
-            DocumentReader.readOfficeText(context, descriptor.uri.toUri(), descriptor.kind)
+            if (descriptor.kind == DocumentKind.CSV) {
+                DocumentReader.readText(context, descriptor.uri.toUri())
+            } else {
+                DocumentReader.readOfficeText(context, descriptor.uri.toUri(), descriptor.kind)
+            }
         }
     }
 
