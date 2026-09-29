@@ -64,12 +64,12 @@ object DocumentReader {
             val cells = Regex("<c[\\s\\S]*?</c>").findAll(rowMatch.value)
             cells.joinToString("    ") { cellMatch ->
                 val cell = cellMatch.value
-                val type = Regex("t=\"([^\"]+)\"").find(cell)?.groupValues?.getOrNull(1)
+                val isSharedString = cell.contains("t=\"s\"")
                 val value = Regex("<v[^>]*>([\\s\\S]*?)</v>").find(cell)
                     ?.groupValues?.getOrNull(1)
 
                 when {
-                    type == "s" && value != null ->
+                    isSharedString && value != null ->
                         shared.getOrNull(value.toIntOrNull() ?: -1).orEmpty()
                     value != null -> decodeXml(value)
                     else ->
