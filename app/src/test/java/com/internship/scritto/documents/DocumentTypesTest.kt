@@ -14,6 +14,12 @@ class DocumentTypesTest {
     }
 
     @Test
+    fun keepsPreviewOnlyFilesReadOnly() {
+        assertTrue(!DocumentTypes.describe("notes.md", "content://x").capabilities.canEdit)
+        assertTrue(!DocumentTypes.describe("script.py", "content://x").capabilities.canConvert)
+    }
+
+    @Test
     fun alignsBraceBasedCodeWithoutChangingLineCount() {
         val source = "fun main() {\nprintln(1)\n}"
         val aligned = CodeFormatter.alignForDisplay(source, "Kotlin")
