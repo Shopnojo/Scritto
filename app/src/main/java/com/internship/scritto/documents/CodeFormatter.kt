@@ -3,7 +3,10 @@ package com.internship.scritto.documents
 object CodeFormatter {
     fun alignForDisplay(source: String, language: String?): String {
         if (source.isBlank()) return source
+
         val lines = source.replace("\r\n", "\n").split("\n")
+        if (!shouldAutoAlign(lines)) return source.replace("\r\n", "\n")
+
         val normalized = when (language) {
             "Python", "Ruby" -> indentBlockLanguage(lines)
             "C", "C++", "Java", "Kotlin", "JavaScript", "JavaScript React",
@@ -13,6 +16,14 @@ object CodeFormatter {
             else -> lines
         }
         return normalized.joinToString("\n")
+    }
+
+    private fun shouldAutoAlign(lines: List<String>): Boolean {
+        val nonBlank = lines.filter { it.isNotBlank() }
+        if (nonBlank.size < 2) return false
+
+        val indented = nonBlank.count { it.firstOrNull()?.isWhitespace() == true }
+        return indented == 0
     }
 
     private fun indentBraceLanguage(lines: List<String>): List<String> {
