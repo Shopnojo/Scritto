@@ -29,7 +29,8 @@ object DocumentReader {
                     if (!entry.isDirectory &&
                         (entry.name == preferred || entry.name == "xl/sharedStrings.xml")
                     ) {
-                        entries[entry.name] = zip.bufferedReader(StandardCharsets.UTF_8).readText()
+                        entries[entry.name] =
+                            zip.bufferedReader(StandardCharsets.UTF_8).readText()
                     }
                     zip.closeEntry()
                 }
@@ -65,21 +66,25 @@ object DocumentReader {
             cells.joinToString("    ") { cellMatch ->
                 val cell = cellMatch.value
                 val isSharedString = cell.contains("t=\"s\"")
-                val value = Regex("<v[^>]*>([\\s\\S]*?)</v>").find(cell)
-                    ?.groupValues?.getOrNull(1)
+                val value = Regex("<v[^>]*>([\\s\\S]*?)</v>")
+                    .find(cell)
+                    ?.groupValues
+                    ?.getOrNull(1)
 
                 when {
                     isSharedString && value != null ->
                         shared.getOrNull(value.toIntOrNull() ?: -1).orEmpty()
                     value != null -> decodeXml(value)
                     else ->
-                        Regex("<t[^>]*>([\\s\\S]*?)</t>").find(cell)
-                            ?.groupValues?.getOrNull(1)
+                        Regex("<t[^>]*>([\\s\\S]*?)</t>")
+                            .find(cell)
+                            ?.groupValues
+                            ?.getOrNull(1)
                             ?.let { text -> decodeXml(text) }
                             .orEmpty()
                 }
             }
-        )
+        }
     }
 
     private fun xmlToReadableText(xml: String): String {
