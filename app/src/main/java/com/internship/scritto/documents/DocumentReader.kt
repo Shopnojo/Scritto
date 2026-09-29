@@ -47,12 +47,12 @@ object DocumentReader {
     private fun xmlToSheetText(xml: String, shared: List<String>): String =
         Regex("<row[\\s\\S]*?</row>").findAll(xml).joinToString("\n") { row ->
             Regex("<c[\\s\\S]*?</c>").findAll(row.value).joinToString("    ") { cell ->
-                val type = Regex("t=\"([^\"]+)\"").find(cell)?.groupValues?.getOrNull(1)
-                val value = Regex("<v[^>]*>([\\s\\S]*?)</v>").find(cell)?.groupValues?.getOrNull(1)
+                val type = Regex("t=\"([^\"]+)\"").find(cell.value)?.groupValues?.getOrNull(1)
+                val value = Regex("<v[^>]*>([\\s\\S]*?)</v>").find(cell.value)?.groupValues?.getOrNull(1)
                 when {
                     type == "s" && value != null -> shared.getOrNull(value.toIntOrNull() ?: -1).orEmpty()
                     value != null -> decodeXml(value)
-                    else -> Regex("<t[^>]*>([\\s\\S]*?)</t>").find(cell)
+                    else -> Regex("<t[^>]*>([\\s\\S]*?)</t>").find(cell.value)
                         ?.groupValues?.getOrNull(1)?.let(::decodeXml).orEmpty()
                 }
             }
