@@ -100,6 +100,10 @@ dependencies {
     // Material outline icons for the compact Scritto dock
     implementation("androidx.compose.material:material-icons-extended")
 
+    // Document workspace engines: PDF rendering/editing and OOXML documents.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
+
     testImplementation(libs.junit)
     // The Android SDK jar stubs org.json in local unit tests; use the real one there.
     testImplementation("org.json:json:20240303")
