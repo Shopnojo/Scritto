@@ -28,12 +28,12 @@ object DocumentTypes {
         "bash" to "Shell", "zsh" to "Shell", "cs" to "C#", "scala" to "Scala",
         "groovy" to "Groovy", "gradle" to "Gradle", "lua" to "Lua", "r" to "R",
         "m" to "Objective-C", "mm" to "Objective-C++", "vue" to "Vue",
-        "svelte" to "Svelte", "asm" to "Assembly", "yml" to "YAML", "yaml" to "YAML"
+        "svelte" to "Svelte", "asm" to "Assembly", "s" to "Assembly", "yml" to "YAML", "yaml" to "YAML", "toml" to "TOML", "ini" to "INI", "cfg" to "INI", "proto" to "Protocol Buffers", "graphql" to "GraphQL", "gql" to "GraphQL", "hs" to "Haskell", "lhs" to "Haskell", "fs" to "F#", "fsx" to "F#", "clj" to "Clojure", "cljs" to "ClojureScript", "ex" to "Elixir", "exs" to "Elixir", "erl" to "Erlang", "hrl" to "Erlang", "pl" to "Perl", "pm" to "Perl", "rkt" to "Racket", "jl" to "Julia", "sol" to "Solidity", "asm" to "Assembly", "v" to "Verilog", "sv" to "SystemVerilog", "vhd" to "VHDL", "vhdl" to "VHDL", "ps1" to "PowerShell", "bat" to "Batch", "cmd" to "Batch"
     )
 
     fun describe(name: String, uri: String): DocumentDescriptor {
-        val extension = name.substringAfterLast('.', "").lowercase()
-        val kind = when (extension) {
+        val extension = name.substringAfterLast('.', "").lowercase()\n        val specialName = name.substringAfterLast('/').lowercase()
+        val kind = when {\n            specialName == "dockerfile" -> DocumentKind.CODE\n            specialName == "makefile" -> DocumentKind.CODE\n            specialName == ".gitignore" || specialName == ".gitattributes" -> DocumentKind.CODE\n            else -> when (extension) {
             "txt", "log" -> DocumentKind.TEXT
             "md", "markdown" -> DocumentKind.MARKDOWN
             "json" -> DocumentKind.JSON
@@ -52,7 +52,7 @@ object DocumentTypes {
             name = name,
             uri = uri,
             kind = kind,
-            language = codeLanguages[extension],
+            language = when {\n                specialName == "dockerfile" -> "Dockerfile"\n                specialName == "makefile" -> "Makefile"\n                specialName == ".gitignore" || specialName == ".gitattributes" -> "Git"\n                else -> codeLanguages[extension]\n            },
             capabilities = DocumentCapabilities(editable, editable)
         )
     }
