@@ -59,6 +59,7 @@ import com.internship.scritto.screens.NotesScreen
 import com.internship.scritto.screens.ScheduleScreen
 import com.internship.scritto.screens.TaskScreen
 import com.internship.scritto.screens.DocumentPreviewScreen
+import com.internship.scritto.screens.DocumentEditorScreen
 import com.internship.scritto.ui.splash.ScrittoSplashScreen
 
 private const val HOME_ROUTE = "home"
@@ -69,6 +70,7 @@ private const val AI_ROUTE = "ai"
 private const val FILES_ROUTE = "files"
 private const val NOTE_EDITOR_ROUTE = "note/{noteId}"
 private const val DOCUMENT_ROUTE = "document/{name}/{uri}"
+private const val DOCUMENT_EDITOR_ROUTE = "document-editor/{name}/{uri}/{convertMode}"
 
 private fun scheduleRoute(openComposer: Boolean = false) = "schedule/$openComposer"
 
@@ -200,6 +202,27 @@ fun ScrittoNavigation() {
                 )
             }
 
+            composable(
+                route = DOCUMENT_EDITOR_ROUTE,
+                arguments = listOf(
+                    navArgument("name") { type = NavType.StringType },
+                    navArgument("uri") { type = NavType.StringType },
+                    navArgument("convertMode") { type = NavType.BoolType }
+                )
+            ) { backStackEntry ->
+                val name = backStackEntry.arguments?.getString("name")
+                val uri = backStackEntry.arguments?.getString("uri")
+                val convertMode = backStackEntry.arguments?.getBoolean("convertMode") == true
+                if (name != null && uri != null) {
+                    DocumentEditorScreen(
+                        name = name,
+                        uri = uri,
+                        convertMode = convertMode,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+
             composable(FILES_ROUTE) {
                 FilesScreen(
                     onFileSelected = { file ->
@@ -223,7 +246,17 @@ fun ScrittoNavigation() {
                     DocumentPreviewScreen(
                         name = name,
                         uri = uri,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onEdit = {
+                            navController.navigate(
+                                "document-editor/" + Uri.encode(name) + "/" + Uri.encode(uri) + "/false"
+                            )
+                        },
+                        onConvert = {
+                            navController.navigate(
+                                "document-editor/" + Uri.encode(name) + "/" + Uri.encode(uri) + "/true"
+                            )
+                        }
                     )
                 }
             }
