@@ -177,21 +177,31 @@ private fun DocumentBottomBar(
     onShare: () -> Unit,
     onMore: () -> Unit
 ) {
-    Row(
+    Box(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.Center
     ) {
-        if (descriptor.capabilities.canEdit) {
-            ActionButton("Edit", Icons.Outlined.Edit, onEdit, Modifier.weight(1f))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(ScrittoSurface.copy(alpha = 0.88f))
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (descriptor.capabilities.canEdit) {
+                ActionButton("Edit", Icons.Outlined.Edit, onEdit, Modifier.weight(1f))
+            }
+            if (descriptor.capabilities.canConvert) {
+                ActionButton("Convert", Icons.Outlined.Download, onConvert, Modifier.weight(1f))
+            }
+            ActionButton("Share", Icons.Outlined.Share, onShare, Modifier.weight(1f))
+            ActionButton("More", Icons.Outlined.MoreVert, onMore, Modifier.weight(1f))
         }
-        if (descriptor.capabilities.canConvert) {
-            ActionButton("Convert", Icons.Outlined.Download, onConvert, Modifier.weight(1f))
-        }
-        ActionButton("Share", Icons.Outlined.Share, onShare, Modifier.weight(1f))
-        ActionButton("More", Icons.Outlined.MoreVert, onMore, Modifier.weight(1f))
     }
 }
 
