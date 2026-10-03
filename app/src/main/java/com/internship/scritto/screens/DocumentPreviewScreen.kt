@@ -190,8 +190,8 @@ private fun DocumentBottomBar(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
                 .background(ScrittoSurface.copy(alpha = 0.88f))
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (descriptor.capabilities.canEdit) {
@@ -215,12 +215,18 @@ private fun ActionButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
-        shape = RoundedCornerShape(16.dp)
+        modifier = modifier.height(46.dp),
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 6.dp)
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(17.dp))
-        Spacer(Modifier.width(5.dp))
-        Text(label, fontSize = 12.sp)
+        Icon(icon, contentDescription = label, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(3.dp))
+        Text(
+            label,
+            fontSize = 11.sp,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 
@@ -241,7 +247,6 @@ private fun TextDocumentPreview(descriptor: DocumentDescriptor, monospace: Boole
             .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState())
             .horizontalScroll(rememberScrollState())
-            .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp))
             .padding(18.dp)
     ) {
         Text(
@@ -284,7 +289,6 @@ private fun CodeDocumentPreview(descriptor: DocumentDescriptor) {
         Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp))
             .horizontalScroll(rememberScrollState())
             .verticalScroll(rememberScrollState())
             .padding(vertical = 16.dp)
@@ -334,8 +338,7 @@ private fun OfficeDocumentPreview(descriptor: DocumentDescriptor) {
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp)
-                .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp)),
+                .padding(horizontal = 20.dp),
             contentAlignment = Alignment.Center
         ) {
             Text("Loading document…", color = ScrittoTextSecondary)
@@ -361,8 +364,7 @@ private fun OfficeDocumentPreview(descriptor: DocumentDescriptor) {
         Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(0.dp))
     ) {
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -473,6 +475,7 @@ private fun PdfDocumentPreview(descriptor: DocumentDescriptor) {
         Modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         items(pageCount) { pageIndex ->
@@ -507,7 +510,6 @@ private fun PdfPage(renderer: PdfRenderer?, pageIndex: Int) {
             "PDF page " + (pageIndex + 1),
             Modifier
                 .fillMaxWidth()
-                .background(ScrittoCream, RoundedCornerShape(10.dp))
         )
     }
 }
@@ -528,8 +530,7 @@ private fun ImageDocumentPreview(descriptor: DocumentDescriptor) {
     Box(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp)
-            .background(ScrittoSurface.copy(alpha = 0.52f), RoundedCornerShape(20.dp)),
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
         bitmap?.let {
