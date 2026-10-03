@@ -50,6 +50,8 @@ private enum class PdfAnnotationTool {
 private data class PdfTextAnnotation(
     val x: Float,
     val y: Float,
+    val width: Float = 220f,
+    val height: Float = 64f,
     val text: String = "Text"
 )
 
@@ -130,6 +132,7 @@ fun PdfAnnotationWorkspace(
                                     )
                                 } else state
                             }
+                            selectedTextIndex = pages[index].texts.lastIndex + 1
                         },
                         onTextChanged = { textIndex, value ->
                             pages = pages.mapIndexed { pageIndex, state ->
@@ -137,6 +140,28 @@ fun PdfAnnotationWorkspace(
                                     state.copy(
                                         texts = state.texts.mapIndexed { i, text ->
                                             if (i == textIndex) text.copy(text = value) else text
+                                        }
+                                    )
+                                } else state
+                            }
+                        },
+                        onTextMoved = { textIndex, x, y ->
+                            pages = pages.mapIndexed { pageIndex, state ->
+                                if (pageIndex == index) {
+                                    state.copy(
+                                        texts = state.texts.mapIndexed { i, text ->
+                                            if (i == textIndex) text.copy(x = x, y = y) else text
+                                        }
+                                    )
+                                } else state
+                            }
+                        },
+                        onTextResized = { textIndex, width, height ->
+                            pages = pages.mapIndexed { pageIndex, state ->
+                                if (pageIndex == index) {
+                                    state.copy(
+                                        texts = state.texts.mapIndexed { i, text ->
+                                            if (i == textIndex) text.copy(width = width, height = height) else text
                                         }
                                     )
                                 } else state
@@ -178,6 +203,7 @@ private fun PdfAnnotationPage(
     onStrokeFinished: (List<Offset>) -> Unit
 ) {
     var draftStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var selectedTextIndex by remember { mutableStateOf<Int?>(null) }
 
     Box(
         Modifier
