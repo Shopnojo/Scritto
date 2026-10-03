@@ -12,7 +12,6 @@ import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import org.apache.poi.xwpf.usermodel.XWPFDocument
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
@@ -22,16 +21,7 @@ object DocumentEngine {
     fun readEditableText(context: Context, descriptor: DocumentDescriptor): String {
         return when (descriptor.kind) {
             DocumentKind.CSV -> DocumentReader.readText(context, descriptor.uri.toUri())
-            DocumentKind.DOCX -> context.contentResolver.openInputStream(descriptor.uri.toUri())?.use { input ->
-                XWPFDocument(input).use { doc ->
-                    doc.paragraphs.joinToString("\n") { it.text } +
-                        doc.tables.flatMap { table ->
-                            table.rows.flatMap { row ->
-                                row.tableCells.map { it.text }
-                            }
-                        }.joinToString("\n", prefix = if (doc.tables.isNotEmpty()) "\n" else "")
-                }
-            }.orEmpty()
+            DocumentKind.DOCX -> DocxXmlEngine.readText(context, descriptor.uri.toUri())
             DocumentKind.XLSX -> context.contentResolver.openInputStream(descriptor.uri.toUri())?.use { input ->
                 XSSFWorkbook(input).use { workbook ->
                     val sheet = workbook.getSheetAt(0)
@@ -67,7 +57,14 @@ object DocumentEngine {
     ) {
         when (descriptor.kind) {
             DocumentKind.CSV -> output.write(text.toByteArray(StandardCharsets.UTF_8))
-            DocumentKind.DOCX -> writeDocx(context, descriptor.uri.toUri(), text, output)
+            DocumentKind.DOCX -> {
+                val (paragraphs, tables) = DocxXmlEngine.read(context, descriptor.uri.toUri())
+                val updatedParagraphs = text.replace("\r\n", "\n").split("\n").mapIndexed { index, line ->
+                    paragraphs.getOrNull(index)?.copy(text = line)
+                        ?: DocxParagraphBlock(index, line, "")
+                }
+                DocxXmlEngine.save(context, descriptor.uri.toUri(), updatedParagraphs, tables, output)
+            }
             DocumentKind.XLSX -> writeXlsx(context, descriptor.uri.toUri(), text, output)
             DocumentKind.PDF -> writePdfText(context, descriptor.uri.toUri(), text, output)
             else -> output.write(text.toByteArray(StandardCharsets.UTF_8))
@@ -92,9 +89,9 @@ object DocumentEngine {
                 else -> output.write(readXlsxAsCsv(context, descriptor.uri.toUri()).toByteArray())
             }
             DocumentKind.DOCX -> when (targetExtension) {
-                "pdf" -> writePdfText(context, null, readDocx(context, descriptor.uri.toUri()), output)
-                "txt" -> output.write(readDocx(context, descriptor.uri.toUri()).toByteArray())
-                else -> output.write(readDocx(context, descriptor.uri.toUri()).toByteArray())
+                "pdf" -> writePdfText(context, null, DocxXmlEngine.readText(context, descriptor.uri.toUri()), output)
+                "txt" -> output.write(DocxXmlEngine.readText(context, descriptor.uri.toUri()).toByteArray())
+                else -> output.write(DocxXmlEngine.readText(context, descriptor.uri.toUri()).toByteArray())
             }
             DocumentKind.PDF -> when (targetExtension) {
                 "txt" -> output.write(readPdfText(context, descriptor.uri.toUri()).toByteArray())
@@ -159,49 +156,6 @@ object DocumentEngine {
         if (cropped !== source) cropped.recycle()
         source.recycle()
     }
-
-    private fun writeDocx(
-        context: Context,
-        sourceUri: Uri,
-        text: String,
-        output: OutputStream
-    ) {
-        val doc = context.contentResolver.openInputStream(sourceUri)?.use { XWPFDocument(it) }
-            ?: XWPFDocument()
-
-        val lines = text.replace("\r\n", "\n").split("\n")
-        val paragraphs = doc.paragraphs.toMutableList()
-
-        lines.forEachIndexed { index, line ->
-            val paragraph = paragraphs.getOrNull(index) ?: doc.createParagraph()
-            while (paragraph.runs.isNotEmpty()) paragraph.removeRun(0)
-            paragraph.createRun().setText(line)
-        }
-
-        while (doc.paragraphs.size > lines.size && doc.paragraphs.isNotEmpty()) {
-            doc.removeBodyElement(doc.bodyElements.lastIndex)
-        }
-
-        doc.write(output)
-        doc.close()
-    }
-
-    private fun writeDocxFromText(text: String, output: OutputStream) {
-        XWPFDocument().use { doc ->
-            text.replace("\r\n", "\n").split("\n").forEach { line ->
-                doc.createParagraph().createRun().setText(line)
-            }
-            doc.write(output)
-        }
-    }
-
-    private fun readDocx(context: Context, uri: Uri): String =
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            XWPFDocument(input).use { doc ->
-                doc.paragraphs.joinToString("\n") { it.text }
-            }
-        }.orEmpty()
-
     private fun writeXlsx(
         context: Context,
         sourceUri: Uri,
