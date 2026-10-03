@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntOffset
@@ -179,17 +180,23 @@ private fun PdfAnnotationPage(
     var draftStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     Box(
-        Modifier.fillMaxWidth()
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(
+                page.bitmap.width.toFloat() /
+                    page.bitmap.height.toFloat()
+            )
     ) {
             Image(
                 bitmap = page.bitmap.asImageBitmap(),
                 contentDescription = "PDF page",
-                modifier = Modifier.fillMaxWidth()
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.fillMaxSize()
             )
 
             Canvas(
                 Modifier
-                    .matchParentSize()
+                    .fillMaxSize()
                     .pointerInput(tool) {
                         if (tool == PdfAnnotationTool.TEXT) {
                             detectTapGestures { position ->
