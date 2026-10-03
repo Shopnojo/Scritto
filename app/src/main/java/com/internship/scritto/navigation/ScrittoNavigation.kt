@@ -225,6 +225,24 @@ fun ScrittoNavigation() {
             }
 
             composable(
+                route = "pdf-editor/{name}/{uri}",
+                arguments = listOf(
+                    navArgument("name") { type = NavType.StringType },
+                    navArgument("uri") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val name = backStackEntry.arguments?.getString("name")
+                val uri = backStackEntry.arguments?.getString("uri")
+                if (name != null && uri != null) {
+                    com.internship.scritto.documents.PdfAnnotationWorkspaceScreen(
+                        name = name,
+                        uri = uri,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+
+            composable(
                 route = DOCUMENT_EDITOR_ROUTE,
                 arguments = listOf(
                     navArgument("name") { type = NavType.StringType },
@@ -270,9 +288,15 @@ fun ScrittoNavigation() {
                         uri = uri,
                         onBack = { navController.popBackStack() },
                         onEdit = {
-                            navController.navigate(
-                                "document-editor/" + Uri.encode(name) + "/" + Uri.encode(uri) + "/false"
-                            )
+                            if (DocumentTypes.describe(name, uri).kind == com.internship.scritto.documents.DocumentKind.PDF) {
+                                navController.navigate(
+                                    "pdf-editor/" + Uri.encode(name) + "/" + Uri.encode(uri)
+                                )
+                            } else {
+                                navController.navigate(
+                                    "document-editor/" + Uri.encode(name) + "/" + Uri.encode(uri) + "/false"
+                                )
+                            }
                         },
                         onConvert = {
                             navController.navigate(
@@ -579,6 +603,41 @@ fun ScrittoNavigation() {
         if (splashVisible) {
             ScrittoSplashScreen(
                 onFinished = { splashVisible = false }
+            )
+        }
+    }
+}
+@Composable
+private fun PdfEditorWorkspaceScreen(
+    name: String,
+    uri: String,
+    onBack: () -> Unit
+) {
+    val descriptor = com.internship.scritto.documents.DocumentTypes.describe(name, uri)
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.IconButton(onClick = onBack) {
+                    Icon(
+                        androidx.compose.material.icons.automirrored.outlined.ArrowBack,
+                        "Back",
+                        tint = com.internship.scritto.ui.theme.ScrittoCreamBright
+                    )
+                }
+                Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                    Text(name, color = com.internship.scritto.ui.theme.ScrittoCreamBright, style = MaterialTheme.typography.titleMedium)
+                    Text("PDF editor", color = com.internship.scritto.ui.theme.ScrittoTextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            com.internship.scritto.documents.PdfAnnotationWorkspace(
+                modifier = Modifier.weight(1f),
+                descriptor = descriptor
             )
         }
     }
