@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,7 +50,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import androidx.activity.compose.DisposableEffect
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.internship.scritto.ai.AssistantSession
@@ -107,9 +107,6 @@ fun ScrittoNavigation() {
         val activity = view.context as? Activity
         val window = activity?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        controller?.systemBarsBehavior = WindowInsetsCompat.Behavior.
-            SHOW_TRANSIENT_BARS_BY_SWIPE
-
         if (isDocumentScreen) {
             controller?.hide(WindowInsetsCompat.Type.navigationBars())
         } else {
