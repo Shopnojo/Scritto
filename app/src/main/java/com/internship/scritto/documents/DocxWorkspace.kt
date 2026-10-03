@@ -22,7 +22,6 @@ import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.poi.xwpf.usermodel.XWPFDocument
 
 @Composable
 fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Modifier = Modifier) {
@@ -38,7 +37,13 @@ fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Mo
             status = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(destination)?.use {
-                        saveDocx(context, descriptor.uri.toUri(), paragraphs.toList(), tables.toList(), it)
+                        DocxXmlEngine.save(
+                            context,
+                            descriptor.uri.toUri(),
+                            paragraphs.toList(),
+                            tables.toList(),
+                            it
+                        )
                     } ?: error("Could not open destination")
                     "Saved"
                 }.getOrElse { "Could not save DOCX" }
