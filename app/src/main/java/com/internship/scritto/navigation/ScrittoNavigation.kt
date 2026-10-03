@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
-import ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -627,7 +627,7 @@ private fun PdfEditorWorkspaceScreen(
             ) {
                 androidx.compose.material3.IconButton(onClick = onBack) {
                     Icon(
-                        androidx.compose.material.icons.automirrored.outlined.ArrowBack,
+                        androidx.compose.material.icons.automirrored.filled.ArrowBack,
                         "Back",
                         tint = com.internship.scritto.ui.theme.ScrittoCreamBright
                     )
