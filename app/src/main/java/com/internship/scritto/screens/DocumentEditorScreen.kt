@@ -30,6 +30,7 @@ import com.internship.scritto.documents.DocumentKind
 import com.internship.scritto.documents.PdfAnnotationWorkspace
 import com.internship.scritto.documents.DocxWorkspace
 import com.internship.scritto.documents.SpreadsheetWorkspace
+import com.internship.scritto.documents.ImageWorkspace
 import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -143,18 +144,21 @@ fun DocumentEditorScreen(
             }
 
             when {
-                descriptor.kind == DocumentKind.IMAGE -> ImageEditorBody(
-                    modifier = Modifier.weight(1f),
-                    cropRatio = cropRatio,
-                    customRatio = customRatio,
+                descriptor.kind == DocumentKind.IMAGE -> ImageWorkspace(
+                    context = context,
+                    descriptor = descriptor,
                     rotation = imageRotation,
                     flipH = flipH,
                     flipV = flipV,
-                    onCropRatio = { cropRatio = it },
-                    onCustomRatio = { customRatio = it },
+                    cropRatio = cropRatio,
+                    customRatio = customRatio,
                     onRotate = { imageRotation = (imageRotation + 90f) % 360f },
                     onFlipH = { flipH = !flipH },
-                    onFlipV = { flipV = !flipV }
+                    onFlipV = { flipV = !flipV },
+                    onCropRatio = { cropRatio = it },
+                    onCustomRatio = { customRatio = it },
+                    onSave = { saveImage() },
+                    modifier = Modifier.weight(1f)
                 )
                 descriptor.kind == DocumentKind.PDF && !convertMode -> PdfAnnotationWorkspace(
                     modifier = Modifier.weight(1f),
@@ -189,16 +193,6 @@ fun DocumentEditorScreen(
                 )
             }
 
-            if (!convertMode && descriptor.kind == DocumentKind.IMAGE) {
-                Button(
-                    onClick = { saveImage() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
-                ) {
-                    Text("Save edited image")
-                }
-            }
         }
     }
 
@@ -252,65 +246,6 @@ private fun TextEditBody(
                     lineHeight = 21.sp
                 )
             )
-        }
-    }
-}
-
-@Composable
-private fun ImageEditorBody(
-    modifier: Modifier,
-    cropRatio: String,
-    customRatio: String,
-    rotation: Float,
-    flipH: Boolean,
-    flipV: Boolean,
-    onCropRatio: (String) -> Unit,
-    onCustomRatio: (String) -> Unit,
-    onRotate: () -> Unit,
-    onFlipH: () -> Unit,
-    onFlipV: () -> Unit
-) {
-    Column(
-        modifier.fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Crop", color = ScrittoCreamBright, fontSize = 18.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            listOf("Original", "1:1", "4:3", "16:9", "9:16").forEach { ratio ->
-                FilterChip(
-                    selected = cropRatio == ratio,
-                    onClick = { onCropRatio(ratio) },
-                    label = { Text(ratio) }
-                )
-            }
-        }
-        OutlinedTextField(
-            value = customRatio,
-            onValueChange = onCustomRatio,
-            label = { Text("Custom W:H") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Text("Transform", color = ScrittoCreamBright, fontSize = 18.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onRotate) {
-                Icon(Icons.Outlined.Rotate90DegreesCw, null)
-                Spacer(Modifier.width(5.dp))
-                Text("Rotate " + rotation.toInt() + "°")
-            }
-            OutlinedButton(onClick = onFlipH) {
-                Icon(Icons.Outlined.Flip, null)
-                Spacer(Modifier.width(5.dp))
-                Text(if (flipH) "Flip H ✓" else "Flip H")
-            }
-            OutlinedButton(onClick = onFlipV) {
-                Icon(Icons.Outlined.Flip, null)
-                Spacer(Modifier.width(5.dp))
-                Text(if (flipV) "Flip V ✓" else "Flip V")
-            }
         }
     }
 }
