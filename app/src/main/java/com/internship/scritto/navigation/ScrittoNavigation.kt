@@ -1,5 +1,6 @@
 package com.internship.scritto.navigation
 
+import android.app.Activity
 import android.net.Uri
 
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -40,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -47,6 +49,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.activity.compose.DisposableEffect
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.internship.scritto.ai.AssistantSession
 import com.internship.scritto.components.ScrittoDock
 import com.internship.scritto.components.ScrittoMesh
@@ -96,6 +101,25 @@ fun ScrittoNavigation() {
     val isEditingNote = currentRoute == NOTE_EDITOR_ROUTE
     val isDocumentScreen = currentRoute == DOCUMENT_ROUTE || currentRoute == DOCUMENT_EDITOR_ROUTE
     val density = LocalDensity.current
+    val view = LocalView.current
+
+    DisposableEffect(isDocumentScreen) {
+        val activity = view.context as? Activity
+        val window = activity?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        controller?.systemBarsBehavior = WindowInsetsCompat.Behavior.
+            SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        if (isDocumentScreen) {
+            controller?.hide(WindowInsetsCompat.Type.navigationBars())
+        } else {
+            controller?.show(WindowInsetsCompat.Type.navigationBars())
+        }
+
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.navigationBars())
+        }
+    }
 
     var splashVisible by rememberSaveable { mutableStateOf(true) }
 
