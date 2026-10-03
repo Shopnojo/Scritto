@@ -627,7 +627,7 @@ private fun PdfEditorWorkspaceScreen(
             ) {
                 androidx.compose.material3.IconButton(onClick = onBack) {
                     Icon(
-                        androidx.compose.material.icons.automirrored.filled.ArrowBack,
+                        androidx.compose.material.icons.automirrored.outlined.ArrowBack,
                         "Back",
                         tint = com.internship.scritto.ui.theme.ScrittoCreamBright
                     )
