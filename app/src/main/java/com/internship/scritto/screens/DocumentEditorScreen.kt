@@ -27,6 +27,7 @@ import androidx.core.net.toUri
 import com.internship.scritto.documents.DocumentDescriptor
 import com.internship.scritto.documents.DocumentEngine
 import com.internship.scritto.documents.DocumentKind
+import com.internship.scritto.documents.PdfAnnotationWorkspace
 import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -153,11 +154,9 @@ fun DocumentEditorScreen(
                     onFlipH = { flipH = !flipH },
                     onFlipV = { flipV = !flipV }
                 )
-                descriptor.kind == DocumentKind.PDF && !convertMode -> PdfEditBody(
+                descriptor.kind == DocumentKind.PDF && !convertMode -> PdfAnnotationWorkspace(
                     modifier = Modifier.weight(1f),
-                    text = text,
-                    onText = { text = it },
-                    onSave = { saveEdited() }
+                    descriptor = descriptor
                 )
                 else -> TextEditBody(
                     modifier = Modifier.weight(1f),
@@ -242,43 +241,6 @@ private fun TextEditBody(
                 )
             )
         }
-    }
-}
-
-@Composable
-private fun PdfEditBody(
-    modifier: Modifier,
-    text: String,
-    onText: (String) -> Unit,
-    onSave: () -> Unit
-) {
-    Column(
-        modifier.fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text(
-            "Basic PDF editing: add a text layer to the first page.",
-            color = ScrittoTextSecondary,
-            fontSize = 13.sp
-        )
-        TextField(
-            value = text,
-            onValueChange = onText,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(ScrittoSurface.copy(alpha = 0.58f), RoundedCornerShape(20.dp)),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent
-            ),
-            textStyle = LocalTextStyle.current.copy(color = ScrittoCream)
-        )
-        Button(
-            onClick = onSave,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Save PDF") }
     }
 }
 
