@@ -29,6 +29,7 @@ import com.internship.scritto.documents.DocumentEngine
 import com.internship.scritto.documents.DocumentKind
 import com.internship.scritto.documents.PdfAnnotationWorkspace
 import com.internship.scritto.documents.DocxWorkspace
+import com.internship.scritto.documents.SpreadsheetWorkspace
 import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -134,7 +135,7 @@ fun DocumentEditorScreen(
                     )
                     Text(name, color = ScrittoTextSecondary, fontSize = 12.sp, maxLines = 1)
                 }
-                if (!convertMode && descriptor.kind != DocumentKind.PDF && descriptor.kind != DocumentKind.IMAGE && descriptor.kind != DocumentKind.DOCX) {
+                if (!convertMode && descriptor.kind != DocumentKind.PDF && descriptor.kind != DocumentKind.IMAGE && descriptor.kind != DocumentKind.DOCX && descriptor.kind != DocumentKind.CSV && descriptor.kind != DocumentKind.XLSX) {
                     IconButton(onClick = { saveEdited() }) {
                         Icon(Icons.Outlined.Save, "Save", tint = ScrittoAmber)
                     }
@@ -160,6 +161,11 @@ fun DocumentEditorScreen(
                     descriptor = descriptor
                 )
                 descriptor.kind == DocumentKind.DOCX && !convertMode -> DocxWorkspace(
+                    context = context,
+                    descriptor = descriptor,
+                    modifier = Modifier.weight(1f)
+                )
+                (descriptor.kind == DocumentKind.CSV || descriptor.kind == DocumentKind.XLSX) && !convertMode -> SpreadsheetWorkspace(
                     context = context,
                     descriptor = descriptor,
                     modifier = Modifier.weight(1f)
