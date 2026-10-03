@@ -94,6 +94,7 @@ fun ScrittoNavigation() {
     val currentRoute = currentBackStackEntry?.destination?.route
 
     val isEditingNote = currentRoute == NOTE_EDITOR_ROUTE
+    val isDocumentScreen = currentRoute == DOCUMENT_ROUTE || currentRoute == DOCUMENT_EDITOR_ROUTE
     val density = LocalDensity.current
 
     var splashVisible by rememberSaveable { mutableStateOf(true) }
@@ -348,7 +349,7 @@ fun ScrittoNavigation() {
             }
         }
 
-        if (!isEditingNote && currentRoute != AI_ROUTE) {
+        if (!isEditingNote && currentRoute != AI_ROUTE && !isDocumentScreen) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
