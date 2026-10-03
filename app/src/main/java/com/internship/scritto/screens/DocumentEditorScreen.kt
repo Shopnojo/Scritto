@@ -256,14 +256,7 @@ private fun ConversionDialog(
     onDismiss: () -> Unit,
     onConvert: (String) -> Unit
 ) {
-    val options = when (descriptor.kind) {
-        DocumentKind.CSV -> listOf("xlsx", "txt")
-        DocumentKind.XLSX -> listOf("csv", "txt")
-        DocumentKind.DOCX -> listOf("pdf", "txt")
-        DocumentKind.PDF -> listOf("docx", "txt")
-        DocumentKind.IMAGE -> listOf("png", "jpg", "webp")
-        else -> emptyList()
-    }
+    val options = com.internship.scritto.documents.DocumentTypes.conversionTargets(descriptor.kind)
 
     AlertDialog(
         onDismissRequest = onDismiss,

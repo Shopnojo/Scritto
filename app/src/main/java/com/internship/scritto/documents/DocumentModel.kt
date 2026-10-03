@@ -39,6 +39,27 @@ object DocumentTypes {
         "bat" to "Batch", "cmd" to "Batch"
     )
 
+    fun conversionTargets(kind: DocumentKind): List<String> = when (kind) {
+        DocumentKind.CSV -> listOf("xlsx", "txt")
+        DocumentKind.XLSX -> listOf("csv", "txt")
+        DocumentKind.DOCX -> listOf("pdf", "txt")
+        DocumentKind.PDF -> listOf("docx", "txt")
+        DocumentKind.IMAGE -> listOf("png", "jpg", "webp")
+        else -> emptyList()
+    }
+
+    fun mimeTypeForExtension(extension: String): String = when (extension.lowercase()) {
+        "pdf" -> "application/pdf"
+        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "csv" -> "text/csv"
+        "txt" -> "text/plain"
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "webp" -> "image/webp"
+        else -> "*/*"
+    }
+
     fun describe(name: String, uri: String): DocumentDescriptor {
         val extension = name.substringAfterLast('.', "").lowercase()
         val specialName = name.substringAfterLast('/').lowercase()
