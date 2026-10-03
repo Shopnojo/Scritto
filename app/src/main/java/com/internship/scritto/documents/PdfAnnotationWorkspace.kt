@@ -200,6 +200,8 @@ private fun PdfAnnotationPage(
     tool: PdfAnnotationTool,
     onTextAdded: (Float, Float) -> Unit,
     onTextChanged: (Int, String) -> Unit,
+    onTextMoved: (Int, Float, Float) -> Unit,
+    onTextResized: (Int, Float, Float) -> Unit,
     onStrokeFinished: (List<Offset>) -> Unit
 ) {
     var draftStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
@@ -264,13 +266,12 @@ private fun PdfAnnotationPage(
             }
 
             page.texts.forEachIndexed { index, annotation ->
-                BasicTextField(
-                    value = annotation.text,
-                    onValueChange = { onTextChanged(index, it) },
-                    textStyle = TextStyle(
-                        color = Color.Black,
-                        fontSize = 16.sp
-                    ),
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val isSelected = selectedTextIndex == index
+                val widthDp = with(density) { annotation.width.toDp() }
+                val heightDp = with(density) { annotation.height.toDp() }
+
+                Box(
                     modifier = Modifier
                         .offset {
                             IntOffset(
@@ -278,16 +279,69 @@ private fun PdfAnnotationPage(
                                 annotation.y.roundToInt()
                             )
                         }
-                        .width(180.dp)
-                        .heightIn(min = 48.dp)
-                        .background(Color.White.copy(alpha = 0.88f), RoundedCornerShape(7.dp))
+                        .width(widthDp)
+                        .height(heightDp)
                         .border(
                             1.dp,
-                            ScrittoAmber,
+                            if (isSelected) ScrittoAmber else Color.Transparent,
                             RoundedCornerShape(7.dp)
                         )
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                )
+                        .background(
+                            Color.White.copy(alpha = 0.88f),
+                            RoundedCornerShape(7.dp)
+                        )
+                        .pointerInput(tool, index, annotation.x, annotation.y) {
+                            if (tool == PdfAnnotationTool.SELECT) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        selectedTextIndex = index
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        val newX = (annotation.x + dragAmount.x)
+                                            .coerceIn(0f, (size.width - annotation.width).coerceAtLeast(0f))
+                                        val newY = (annotation.y + dragAmount.y)
+                                            .coerceIn(0f, (size.height - annotation.height).coerceAtLeast(0f))
+                                        onTextMoved(index, newX, newY)
+                                    }
+                                )
+                            }
+                        }
+                ) {
+                    BasicTextField(
+                        value = annotation.text,
+                        onValueChange = { onTextChanged(index, it) },
+                        readOnly = tool != PdfAnnotationTool.TEXT,
+                        textStyle = TextStyle(
+                            color = Color.Black,
+                            fontSize = 16.sp
+                        ),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    )
+
+                    if (tool == PdfAnnotationTool.SELECT && isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(18.dp)
+                                .background(ScrittoAmber, RoundedCornerShape(4.dp))
+                                .pointerInput(index, annotation.width, annotation.height) {
+                                    detectDragGestures(
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            val newWidth = (annotation.width + dragAmount.x)
+                                                .coerceAtLeast(120f)
+                                            val newHeight = (annotation.height + dragAmount.y)
+                                                .coerceAtLeast(48f)
+                                            onTextResized(index, newWidth, newHeight)
+                                        }
+                                    )
+                                }
+                        )
+                    }
+                }
             }
         }
     }
