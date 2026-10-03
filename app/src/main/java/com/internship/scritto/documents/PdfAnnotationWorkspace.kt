@@ -179,18 +179,8 @@ private fun PdfAnnotationPage(
     var draftStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     Box(
-        Modifier
-            .fillMaxWidth()
-            .background(ScrittoSurface.copy(alpha = 0.42f), RoundedCornerShape(14.dp))
-            .padding(6.dp)
+        Modifier.fillMaxWidth()
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(Color.White, RoundedCornerShape(10.dp))
-                .border(1.dp, ScrittoSurface, RoundedCornerShape(10.dp))
-                .clip(RoundedCornerShape(10.dp))
-        ) {
             Image(
                 bitmap = page.bitmap.asImageBitmap(),
                 contentDescription = "PDF page",
