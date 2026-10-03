@@ -132,7 +132,6 @@ fun PdfAnnotationWorkspace(
                                     )
                                 } else state
                             }
-                            selectedTextIndex = pages[index].texts.lastIndex + 1
                         },
                         onTextChanged = { textIndex, value ->
                             pages = pages.mapIndexed { pageIndex, state ->
