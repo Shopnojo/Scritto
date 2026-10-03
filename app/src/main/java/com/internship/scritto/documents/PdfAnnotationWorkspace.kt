@@ -2,6 +2,8 @@ package com.internship.scritto.documents
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Canvas
@@ -14,6 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
@@ -38,6 +43,7 @@ import com.internship.scritto.ui.theme.ScrittoCreamBright
 import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -69,6 +75,28 @@ fun PdfAnnotationWorkspace(
     val context = androidx.compose.ui.platform.LocalContext.current
     var tool by remember(descriptor.uri) { mutableStateOf(PdfAnnotationTool.TEXT) }
     var pages by remember(descriptor.uri) { mutableStateOf<List<PdfPageState>>(emptyList()) }
+    var saveStatus by remember(descriptor.uri) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val saveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/pdf")
+    ) { destination ->
+        if (destination != null && pages.isNotEmpty()) {
+            scope.launch {
+                saveStatus = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openOutputStream(destination)?.use { output ->
+                            exportPdfPages(
+                                pages = pages,
+                                output = output,
+                                textScale = context.resources.displayMetrics.scaledDensity
+                            )
+                        } ?: error("Could not open destination")
+                        "Saved"
+                    }.getOrElse { "Could not save PDF" }
+                }
+            }
+        }
+    }
 
     LaunchedEffect(descriptor.uri) {
         pages = withContext(Dispatchers.IO) {
@@ -100,11 +128,24 @@ fun PdfAnnotationWorkspace(
                 onClick = { tool = PdfAnnotationTool.DRAW }
             )
             Spacer(Modifier.weight(1f))
-            Text(
-                "PDF canvas",
-                color = ScrittoTextSecondary,
-                fontSize = 12.sp
-            )
+            if (saveStatus != null) {
+                Text(
+                    saveStatus.orEmpty(),
+                    color = ScrittoTextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+            Button(
+                onClick = {
+                    saveStatus = null
+                    saveLauncher.launch(
+                        descriptor.name.substringBeforeLast('.', descriptor.name) + "_edited.pdf"
+                    )
+                },
+                enabled = pages.isNotEmpty()
+            ) {
+                Text("Save PDF")
+            }
         }
 
         if (pages.isEmpty()) {
@@ -397,5 +438,79 @@ private fun renderPdfPages(
                 }
             }
         }
+    }
+}
+
+
+private fun exportPdfPages(
+    pages: List<PdfPageState>,
+    output: java.io.OutputStream,
+    textScale: Float
+) {
+    val document = PdfDocument()
+    try {
+        pages.forEachIndexed { index, page ->
+            val pageInfo = PdfDocument.PageInfo.Builder(
+                page.bitmap.width,
+                page.bitmap.height,
+                index + 1
+            ).create()
+            val pdfPage = document.startPage(pageInfo)
+            val canvas = pdfPage.canvas
+
+            canvas.drawBitmap(page.bitmap, 0f, 0f, null)
+
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.BLACK
+                textSize = 16f * textScale
+            }
+            val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.WHITE
+                alpha = 224
+            }
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = ScrittoAmber.toArgb()
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+
+            page.texts.forEach { annotation ->
+                canvas.drawRoundRect(
+                    annotation.x,
+                    annotation.y,
+                    annotation.x + annotation.width,
+                    annotation.y + annotation.height,
+                    7f,
+                    7f,
+                    backgroundPaint
+                )
+                canvas.drawText(
+                    annotation.text,
+                    annotation.x + 8f,
+                    annotation.y + textPaint.textSize + 6f,
+                    textPaint
+                )
+            }
+
+            page.strokes.forEach { points ->
+                if (points.size > 1) {
+                    val path = android.graphics.Path().apply {
+                        moveTo(points.first().x, points.first().y)
+                        points.drop(1).forEach { point ->
+                            lineTo(point.x, point.y)
+                        }
+                    }
+                    canvas.drawPath(path, strokePaint)
+                }
+            }
+
+            document.finishPage(pdfPage)
+        }
+
+        document.writeTo(output)
+    } finally {
+        document.close()
     }
 }
