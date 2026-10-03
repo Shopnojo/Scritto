@@ -22,11 +22,6 @@ import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.poi.xwpf.usermodel.XWPFDocument
-import java.io.OutputStream
-
-private data class DocxParagraphBlock(val index: Int, val text: String, val style: String)
-private data class DocxTableBlock(val index: Int, val rows: List<List<String>>)
 
 @Composable
 fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Modifier = Modifier) {
@@ -42,7 +37,13 @@ fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Mo
             status = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(destination)?.use {
-                        saveDocx(context, descriptor.uri.toUri(), paragraphs.toList(), tables.toList(), it)
+                        DocxXmlEngine.save(
+                            context,
+                            descriptor.uri.toUri(),
+                            paragraphs.toList(),
+                            tables.toList(),
+                            it
+                        )
                     } ?: error("Could not open destination")
                     "Saved"
                 }.getOrElse { "Could not save DOCX" }
@@ -51,10 +52,21 @@ fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Mo
     }
 
     LaunchedEffect(descriptor.uri) {
-        val result = withContext(Dispatchers.IO) { readDocx(context, descriptor.uri.toUri()) }
-        paragraphs.clear(); paragraphs.addAll(result.first)
-        tables.clear(); tables.addAll(result.second)
-        loaded = true
+        runCatching {
+            withContext(Dispatchers.IO) {
+                DocxXmlEngine.read(context, descriptor.uri.toUri())
+            }
+        }.onSuccess { result ->
+            paragraphs.clear()
+            paragraphs.addAll(result.first)
+            tables.clear()
+            tables.addAll(result.second)
+            loaded = true
+            status = null
+        }.onFailure { error ->
+            loaded = false
+            status = "Could not open DOCX: " + (error.message ?: "unsupported document")
+        }
     }
 
     Column(modifier.fillMaxSize()) {
@@ -123,44 +135,4 @@ fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Mo
             }
         }
     }
-}
-
-private fun readDocx(context: Context, uri: android.net.Uri): Pair<List<DocxParagraphBlock>, List<DocxTableBlock>> =
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        XWPFDocument(input).use { doc ->
-            doc.paragraphs.mapIndexed { i, p -> DocxParagraphBlock(i, p.text, p.style.orEmpty()) } to
-                doc.tables.mapIndexed { i, t -> DocxTableBlock(i, t.rows.map { row -> row.tableCells.map { it.text } }) }
-        }
-    } ?: (emptyList<DocxParagraphBlock>() to emptyList())
-
-private fun saveDocx(
-    context: Context,
-    uri: android.net.Uri,
-    paragraphs: List<DocxParagraphBlock>,
-    tables: List<DocxTableBlock>,
-    output: OutputStream
-) {
-    val doc = context.contentResolver.openInputStream(uri)?.use { XWPFDocument(it) } ?: XWPFDocument()
-    paragraphs.forEach { block ->
-        doc.paragraphs.getOrNull(block.index)?.let { p ->
-            if (p.runs.isEmpty()) p.createRun().setText(block.text)
-            else { p.runs.first().setText(block.text); p.runs.drop(1).forEach { it.setText("") } }
-        }
-    }
-    tables.forEach { tb ->
-        doc.tables.getOrNull(tb.index)?.let { table ->
-            tb.rows.forEachIndexed { r, cells ->
-                table.rows.getOrNull(r)?.let { row ->
-                    cells.forEachIndexed { c, value ->
-                        row.getCell(c)?.let { cell ->
-                            val p = cell.paragraphs.firstOrNull() ?: cell.addParagraph()
-                            if (p.runs.isEmpty()) p.createRun().setText(value)
-                            else { p.runs.first().setText(value); p.runs.drop(1).forEach { it.setText("") } }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    doc.use { it.write(output) }
 }
