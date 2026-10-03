@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
+import ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -234,7 +236,7 @@ fun ScrittoNavigation() {
                 val name = backStackEntry.arguments?.getString("name")
                 val uri = backStackEntry.arguments?.getString("uri")
                 if (name != null && uri != null) {
-                    com.internship.scritto.documents.PdfAnnotationWorkspaceScreen(
+                    PdfEditorWorkspaceScreen(
                         name = name,
                         uri = uri,
                         onBack = { navController.popBackStack() }
@@ -288,7 +290,7 @@ fun ScrittoNavigation() {
                         uri = uri,
                         onBack = { navController.popBackStack() },
                         onEdit = {
-                            if (DocumentTypes.describe(name, uri).kind == com.internship.scritto.documents.DocumentKind.PDF) {
+                            if (com.internship.scritto.documents.DocumentTypes.describe(name, uri).kind == com.internship.scritto.documents.DocumentKind.PDF) {
                                 navController.navigate(
                                     "pdf-editor/" + Uri.encode(name) + "/" + Uri.encode(uri)
                                 )
