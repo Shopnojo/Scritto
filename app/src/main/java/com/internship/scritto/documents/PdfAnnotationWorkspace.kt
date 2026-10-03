@@ -258,7 +258,6 @@ private fun PdfAnnotationPage(
             }
         }
     }
-}
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(
     points: List<Offset>
