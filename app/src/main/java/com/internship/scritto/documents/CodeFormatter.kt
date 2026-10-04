@@ -94,6 +94,10 @@ object CodeFormatter {
             val opens = line.matches(Regex("^(class|module|def|if|unless|case|begin|for|while|until)\\b.*")) ||
                 line.endsWith(" do") || line.endsWith(" do |")
             if (opens && line != "end") level++
+
+            // else / elsif / rescue / ensure / when close the previous branch but
+            // keep the enclosing block open, so the body that follows indents again.
+            if (dedent && line != "end") level++
             result
         }
     }

@@ -9,6 +9,12 @@ data class NoteSpan(
     val strike: Boolean = false
 )
 
+/** An imported file the note refers to. Stored by uri, so the file stays in Files. */
+data class NoteFile(
+    val name: String,
+    val uri: String
+)
+
 data class Note(
     val id: String,
     val title: String,
@@ -16,5 +22,6 @@ data class Note(
     val updatedAt: Long,
     val spans: List<NoteSpan> = emptyList(),
     val textAlign: String = "left",
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val files: List<NoteFile> = emptyList()
 )

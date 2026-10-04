@@ -179,6 +179,9 @@ class ScrittoAssistant(
         appendLine("- Only call the tools you were given. You cannot browse the web or use other apps.")
         appendLine("- For follow-up questions about a file the user attached or imported, call read_file again with its name; the file's text is not kept between messages.")
         appendLine("- For 'what's on my schedule' style questions, use get_day_agenda / list_events / list_tasks rather than guessing from memory.")
+        appendLine("- PDF edits: call get_pdf_text once for the pages you need, then edit_pdf ONCE with every change the user asked for. Never loop over pages or retry edits you already made.")
+        appendLine("- Make only the changes the user asked for. If the request is unclear (which text, which page, what new text), ask one short question instead of guessing.")
+        appendLine("- An edited PDF is a new file in Files and the original is unchanged. Tell the user the new file name.")
         appendLine()
 
         if (voice) {

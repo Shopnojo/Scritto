@@ -20,6 +20,21 @@ class DocumentTypesTest {
     }
 
     @Test
+    fun txtWordAndSpreadsheetFilesCanBeEdited() {
+        val txt = DocumentTypes.describe("notes.txt", "content://x").capabilities
+        assertTrue(txt.canEdit)
+        assertTrue(!txt.canConvert)
+
+        val docx = DocumentTypes.describe("letter.docx", "content://x").capabilities
+        assertTrue(docx.canEdit)
+        assertTrue(docx.canConvert)
+
+        val xlsx = DocumentTypes.describe("sheet.xlsx", "content://x").capabilities
+        assertTrue(xlsx.canEdit)
+        assertTrue(xlsx.canConvert)
+    }
+
+    @Test
     fun alignsBraceBasedCodeWithoutChangingLineCount() {
         val source = "fun main() {\nprintln(1)\n}"
         val aligned = CodeFormatter.alignForDisplay(source, "Kotlin")

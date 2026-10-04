@@ -16,9 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.text.BasicTextField
+import java.io.ByteArrayOutputStream
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,27 +75,7 @@ fun PdfAnnotationWorkspace(
     var tool by remember(descriptor.uri) { mutableStateOf(PdfAnnotationTool.TEXT) }
     var pages by remember(descriptor.uri) { mutableStateOf<List<PdfPageState>>(emptyList()) }
     var saveStatus by remember(descriptor.uri) { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val saveLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/pdf")
-    ) { destination ->
-        if (destination != null && pages.isNotEmpty()) {
-            scope.launch {
-                saveStatus = withContext(Dispatchers.IO) {
-                    runCatching {
-                        context.contentResolver.openOutputStream(destination)?.use { output ->
-                            exportPdfPages(
-                                pages = pages,
-                                output = output,
-                                textScale = context.resources.displayMetrics.scaledDensity
-                            )
-                        } ?: error("Could not open destination")
-                        "Saved"
-                    }.getOrElse { "Could not save PDF" }
-                }
-            }
-        }
-    }
+    val saver = rememberDocumentSaver(descriptor.uri.toUri()) { saveStatus = it }
 
     LaunchedEffect(descriptor.uri) {
         pages = withContext(Dispatchers.IO) {
@@ -138,9 +117,13 @@ fun PdfAnnotationWorkspace(
             Button(
                 onClick = {
                     saveStatus = null
-                    saveLauncher.launch(
-                        descriptor.name.substringBeforeLast('.', descriptor.name) + "_edited.pdf"
-                    )
+                    val snapshot = pages
+                    val textScale = context.resources.displayMetrics.scaledDensity
+                    saver.save(descriptor.name.substringBeforeLast('.', descriptor.name) + "_edited.pdf") {
+                        ByteArrayOutputStream().also { output ->
+                            exportPdfPages(pages = snapshot, output = output, textScale = textScale)
+                        }.toByteArray()
+                    }
                 },
                 enabled = pages.isNotEmpty()
             ) {

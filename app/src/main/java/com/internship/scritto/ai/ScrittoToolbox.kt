@@ -1,6 +1,9 @@
 package com.internship.scritto.ai
 
 import android.content.Context
+import android.net.Uri
+import com.internship.scritto.documents.PdfEditOps
+import com.internship.scritto.documents.PdfEditor
 import com.internship.scritto.data.model.Note
 import com.internship.scritto.data.model.NoteSpan
 import com.internship.scritto.data.model.ScheduleEvent
@@ -11,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.Calendar
 
 /**
@@ -86,6 +90,8 @@ class ScrittoToolbox(
         return try {
             when (name) {
                 "read_file" -> readFile(args)
+                "get_pdf_text" -> getPdfText(args)
+                "edit_pdf" -> editPdf(args)
                 else -> withContext(Dispatchers.Main.immediate) { executeOnMain(name, args) }
             }
         } catch (e: IllegalArgumentException) {
@@ -497,6 +503,119 @@ class ScrittoToolbox(
         }
     }
 
+    // ------------------------------------------------------------------
+    // PDF: read pages and apply edits on the device
+    // ------------------------------------------------------------------
+
+    private fun findPdf(args: JSONObject): Pair<ScrittoStore.ImportedFile?, ToolOutcome?> {
+        val query = args.optStringOrNull("file_name")
+            ?: return null to ToolOutcome.error("Missing 'file_name'.")
+        val file = ScrittoStore.importedFiles.firstOrNull { it.name.equals(query, ignoreCase = true) }
+            ?: ScrittoStore.importedFiles.filter { it.name.contains(query, ignoreCase = true) }.singleOrNull()
+            ?: return null to ToolOutcome.error("No imported file matches '$query'. Call list_files to see the exact names.")
+
+        if (!file.name.endsWith(".pdf", ignoreCase = true)) {
+            return null to ToolOutcome.error("${file.name} is not a PDF. Use read_file for other file types.")
+        }
+        return file to null
+    }
+
+    private suspend fun getPdfText(args: JSONObject): ToolOutcome {
+        val (file, error) = withContext(Dispatchers.Main.immediate) { findPdf(args) }
+        if (file == null) return error ?: ToolOutcome.error("No PDF found.")
+
+        val allowance = PdfEditBudget.readAllowance(appContext, file.uri)
+        if (allowance <= 0) {
+            return ToolOutcome.error(
+                "The daily PDF text limit for ${file.name} is used up. Tell the user to try again tomorrow."
+            )
+        }
+
+        val from = args.optIntOrNull("from_page") ?: 1
+        val to = args.optIntOrNull("to_page") ?: Int.MAX_VALUE
+
+        val read = withContext(Dispatchers.IO) {
+            appContext.contentResolver.openInputStream(Uri.parse(file.uri))?.use { input ->
+                PdfEditor(appContext).readPages(input, from, to, allowance)
+            } ?: throw IllegalStateException("Could not open ${file.name}.")
+        }
+
+        val charsSent = read.pages.sumOf { it.text.length }
+        PdfEditBudget.spendText(appContext, file.uri, charsSent)
+
+        return ToolOutcome(
+            JSONObject()
+                .put("ok", true)
+                .put("file", file.name)
+                .put("page_count", read.pageCount)
+                .put("truncated", read.truncated)
+                .put(
+                    "pages",
+                    JSONArray(read.pages.map { JSONObject().put("page", it.page).put("text", it.text) })
+                ),
+            null
+        )
+    }
+
+    private suspend fun editPdf(args: JSONObject): ToolOutcome {
+        val (file, error) = withContext(Dispatchers.Main.immediate) { findPdf(args) }
+        if (file == null) return error ?: ToolOutcome.error("No PDF found.")
+
+        if (!PdfEditBudget.canEdit(appContext, file.uri)) {
+            return ToolOutcome.error(
+                "The daily edit limit for ${file.name} is used up. Tell the user to try again tomorrow."
+            )
+        }
+
+        val operations = try {
+            PdfEditOps.parse(args.optJSONArray("operations") ?: JSONArray())
+        } catch (e: IllegalArgumentException) {
+            return ToolOutcome.error(e.message ?: "The edits were not valid.")
+        }
+
+        val target = File(appContext.filesDir, "edited").apply { mkdirs() }
+            .let { File(it, editedName(file.name)) }
+
+        val report = withContext(Dispatchers.IO) {
+            try {
+                val input = appContext.contentResolver.openInputStream(Uri.parse(file.uri))
+                    ?: throw IllegalStateException("Could not open ${file.name}.")
+                input.use { source ->
+                    target.outputStream().use { output -> PdfEditor(appContext).applyEdits(source, operations, output) }
+                }
+            } catch (e: Exception) {
+                target.delete()
+                throw e
+            }
+        }
+
+        if (report.applied == 0) {
+            target.delete()
+            return ToolOutcome.error("No edit could be made. " + report.skipped.joinToString(" "))
+        }
+
+        PdfEditBudget.spendEdit(appContext, file.uri)
+
+        val created = ScrittoStore.ImportedFile(name = target.name, uri = Uri.fromFile(target).toString())
+        withContext(Dispatchers.Main.immediate) { ScrittoStore.addImportedFile(created) }
+
+        return ToolOutcome(
+            JSONObject()
+                .put("ok", true)
+                .put("created", target.name)
+                .put("applied", report.applied)
+                .put("skipped", JSONArray(report.skipped))
+                .put("note", "The original ${file.name} is unchanged."),
+            AssistantAction("Created ${target.name}", AssistantAction.Kind.FILE, NavTarget.Files)
+        )
+    }
+
+    private fun editedName(original: String): String {
+        val base = original.substringBeforeLast('.').replace(Regex("[^A-Za-z0-9 _-]"), "_").take(40)
+        val stamp = System.currentTimeMillis() / 1000
+        return "${base.ifBlank { "document" }}_edited_$stamp.pdf"
+    }
+
     private fun search(args: JSONObject): ToolOutcome {
         val query = args.optStringOrNull("query") ?: return ToolOutcome.error("Missing 'query'.")
         val needle = query.lowercase()
@@ -610,6 +729,7 @@ class ScrittoToolbox(
             .put("title", note.title)
             .put("pinned", note.isPinned)
             .put("updated", AssistantTime.iso(note.updatedAt))
+            .put("referenced_files", JSONArray(note.files.map { it.name }))
             .put(
                 if (preview) "preview" else "content",
                 when {

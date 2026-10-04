@@ -24,7 +24,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import com.internship.scritto.components.MicWaveButton
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.internship.scritto.data.repository.ScrittoStore
@@ -85,7 +88,7 @@ fun HomeScreen(
         .take(3)
     val dashboardScrollState = rememberScrollState()
 
-    var greetingContent by remember {
+    var greeting by remember {
         mutableStateOf(greetingContent())
     }
 
@@ -96,7 +99,7 @@ fun HomeScreen(
                 60_000L - (now.timeInMillis % 60_000L)
 
             delay(millisUntilNextMinute)
-            greetingContent = greetingContent()
+            greeting = greetingContent()
         }
     }
 
@@ -122,7 +125,7 @@ fun HomeScreen(
         // ================================================================
 
         Text(
-            text = greetingContent.first,
+            text = greeting.first,
             color = ScrittoCreamBright,
             fontSize = 34.sp,
             lineHeight = 40.sp,
@@ -134,7 +137,7 @@ fun HomeScreen(
         )
 
         Text(
-            text = greetingContent.second,
+            text = greeting.second,
             color = ScrittoTextSecondary,
             fontSize = 17.sp,
             lineHeight = 24.sp
@@ -422,7 +425,9 @@ private fun HomeQuickAction(
                 color = ScrittoBorderSubtle,
                 shape = RoundedCornerShape(18.dp)
             )
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            // Inset on every side so the icon and label never sit on the border.
+            .padding(horizontal = 4.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -438,11 +443,22 @@ private fun HomeQuickAction(
             modifier = Modifier.height(7.dp)
         )
 
-        Text(
+        // Five cards share one row on a phone, so a long label such as "Schedule"
+        // shrinks to fit the card instead of spilling over its edges.
+        BasicText(
             text = title,
-            color = ScrittoCream,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
+            style = TextStyle(
+                color = ScrittoCream,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = 9.sp,
+                maxFontSize = 14.sp
+            ),
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

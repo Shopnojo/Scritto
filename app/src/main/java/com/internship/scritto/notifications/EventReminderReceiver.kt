@@ -30,6 +30,13 @@ class EventReminderReceiver : BroadcastReceiver() {
             .setContentText(title)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(
+                NotificationRouter.contentIntent(
+                    context,
+                    NotificationTarget.SCHEDULE,
+                    id.hashCode()
+                )
+            )
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

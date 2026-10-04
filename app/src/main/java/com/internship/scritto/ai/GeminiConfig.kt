@@ -16,7 +16,7 @@ object GeminiConfig {
         "gemini-3.8-flash"
     )
 
-    /** Keys come from local.properties (gemini.api.keys=key1,key2) via BuildConfig. */
+    /** Keys come from GEMINI_API_KEYS in the git-ignored .env file (see .env.example) via BuildConfig. */
     val keys: List<String> =
         BuildConfig.GEMINI_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 

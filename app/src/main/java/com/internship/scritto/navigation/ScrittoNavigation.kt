@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,8 @@ import com.internship.scritto.ai.AssistantSession
 import com.internship.scritto.components.ScrittoDock
 import com.internship.scritto.components.ScrittoMesh
 import com.internship.scritto.data.repository.ScrittoStore
+import com.internship.scritto.notifications.NotificationRouter
+import com.internship.scritto.notifications.NotificationTarget
 import com.internship.scritto.screens.AiChatScreen
 import com.internship.scritto.screens.HomeScreen
 import com.internship.scritto.screens.NoteEditorScreen
@@ -147,6 +150,38 @@ fun ScrittoNavigation() {
 
     var createMenuExpanded by remember {
         mutableStateOf(false)
+    }
+
+    // A tapped notification asks for a specific screen. Open it, then clear the request.
+    val notificationTarget = NotificationRouter.pending
+    LaunchedEffect(notificationTarget) {
+        val target = notificationTarget ?: return@LaunchedEffect
+        NotificationRouter.consume()
+        createMenuExpanded = false
+
+        when (target) {
+            NotificationTarget.HOME -> {
+                selectedDockIndex = 0
+                navController.navigate(HOME_ROUTE) {
+                    popUpTo(HOME_ROUTE) { inclusive = false }
+                    launchSingleTop = true
+                }
+            }
+
+            NotificationTarget.TASKS -> {
+                selectedDockIndex = 2
+                navController.navigate(TASK_ROUTE) {
+                    launchSingleTop = true
+                }
+            }
+
+            NotificationTarget.SCHEDULE -> {
+                selectedDockIndex = -1
+                navController.navigate(scheduleRoute()) {
+                    launchSingleTop = true
+                }
+            }
+        }
     }
 
     Box(
@@ -305,6 +340,14 @@ fun ScrittoNavigation() {
                             navController.navigate(
                                 "document-editor/" + Uri.encode(name) + "/" + Uri.encode(uri) + "/true"
                             )
+                        },
+                        onAskAssistant = {
+                            // The chat picks the file up as an attachment and waits for the user's question.
+                            AssistantSession.pendingFile = ScrittoStore.ImportedFile(name, uri)
+                            selectedDockIndex = 3
+                            navController.navigate(AI_ROUTE) {
+                                launchSingleTop = true
+                            }
                         }
                     )
                 }
@@ -391,6 +434,11 @@ fun ScrittoNavigation() {
                         noteId = noteId,
                         onBack = {
                             navController.popBackStack()
+                        },
+                        onOpenFile = { file ->
+                            navController.navigate(
+                                "document/" + Uri.encode(file.name) + "/" + Uri.encode(file.uri)
+                            )
                         }
                     )
                 }

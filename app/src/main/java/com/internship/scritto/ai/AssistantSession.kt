@@ -14,6 +14,9 @@ object AssistantSession {
     /** Set by Home's mic button: the chat screen opens the voice assistant straight away. */
     var pendingVoice by mutableStateOf(false)
 
+    /** A file shared from its preview ("Ask Scritto AI"); the chat attaches it to the next message. */
+    var pendingFile by mutableStateOf<com.internship.scritto.data.repository.ScrittoStore.ImportedFile?>(null)
+
     /** The chat currently on screen, so it survives the assistant opening another screen. */
     var activeConversationId: String? = null
 

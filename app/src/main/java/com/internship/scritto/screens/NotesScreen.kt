@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -363,10 +364,11 @@ private fun NoteRow(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "▤",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 20.sp
+            Icon(
+                imageVector = Icons.Outlined.Description,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -441,12 +443,13 @@ private fun EmptyNotesState() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            Text(
-                text = "▤",
-                color = MaterialTheme.colorScheme.primary.copy(
+            Icon(
+                imageVector = Icons.Outlined.Description,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(
                     alpha = 0.75f
                 ),
-                fontSize = 38.sp
+                modifier = Modifier.size(38.dp)
             )
 
             Spacer(

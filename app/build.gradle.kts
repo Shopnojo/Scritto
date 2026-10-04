@@ -40,8 +40,8 @@ android {
         applicationId = "com.internship.scritto"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 5
+        versionName = "1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -99,6 +99,9 @@ dependencies {
 
     // Material outline icons for the compact Scritto dock
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Periodic background checks for the "come back to Scritto" reminders
+    implementation("androidx.work:work-runtime-ktx:2.10.2")
 
     // Document workspace engines: PDF rendering/editing and OOXML documents.
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
