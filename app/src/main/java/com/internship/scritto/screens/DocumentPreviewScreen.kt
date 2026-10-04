@@ -40,6 +40,11 @@ import com.internship.scritto.documents.*
 import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun DocumentPreviewScreen(
@@ -47,7 +52,8 @@ fun DocumentPreviewScreen(
     uri: String,
     onBack: () -> Unit,
     onEdit: () -> Unit = {},
-    onConvert: () -> Unit = {}
+    onConvert: () -> Unit = {},
+    onAskAssistant: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val descriptor = remember(name, uri) { DocumentTypes.describe(name, uri) }
@@ -96,6 +102,13 @@ fun DocumentPreviewScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(descriptor.name, color = ScrittoCream)
+                    TextButton(
+                        onClick = {
+                            actionsOpen = false
+                            onAskAssistant()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Ask Scritto AI about this file", color = ScrittoAmber) }
                     Text(
                         when {
                             descriptor.kind == DocumentKind.CODE ->
@@ -230,10 +243,13 @@ private fun ActionButton(
     }
 }
 
+/** Ink colour for text drawn on the white document page. */
+private val PaperInk = androidx.compose.ui.graphics.Color(0xFF1B1B1B)
+
 @Composable
 private fun TextDocumentPreview(descriptor: DocumentDescriptor, monospace: Boolean) {
     val context = LocalContext.current
-    var text by remember(descriptor.uri) { mutableStateOf("Loading…") }
+    var text by remember(descriptor.uri) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(descriptor.uri) {
         text = withContext(Dispatchers.IO) {
@@ -241,21 +257,19 @@ private fun TextDocumentPreview(descriptor: DocumentDescriptor, monospace: Boole
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState())
-            .horizontalScroll(rememberScrollState())
-            .padding(18.dp)
-    ) {
-        Text(
-            text,
-            color = ScrittoCream,
-            fontFamily = if (monospace) FontFamily.Monospace else FontFamily.Default,
-            fontSize = 14.sp,
-            lineHeight = 21.sp
-        )
+    PaperSheet {
+        val body = text
+        if (body == null) {
+            Text("Loading…", color = ScrittoTextSecondary)
+        } else {
+            Text(
+                body,
+                color = PaperInk,
+                fontFamily = if (monospace) FontFamily.Monospace else FontFamily.Default,
+                fontSize = 14.sp,
+                lineHeight = 21.sp
+            )
+        }
     }
 }
 
@@ -319,147 +333,100 @@ private fun CodeDocumentPreview(descriptor: DocumentDescriptor) {
     }
 }
 
+/** Word, spreadsheet and CSV files open on a white page, read-only. Edit switches to the editor. */
 @Composable
 private fun OfficeDocumentPreview(descriptor: DocumentDescriptor) {
+    if (descriptor.kind == DocumentKind.DOCX) {
+        DocxPreview(descriptor)
+    } else {
+        SheetPreview(descriptor)
+    }
+}
+
+@Composable
+private fun DocxPreview(descriptor: DocumentDescriptor) {
     val context = LocalContext.current
-    var text by remember(descriptor.uri) { mutableStateOf("Loading document…") }
+    var page by remember(descriptor.uri) { mutableStateOf<DocxPage?>(null) }
+    var failure by remember(descriptor.uri) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(descriptor.uri) {
-        text = withContext(Dispatchers.IO) {
-            if (descriptor.kind == DocumentKind.CSV) {
-                DocumentReader.readText(context, descriptor.uri.toUri())
-            } else {
-                DocumentReader.readOfficeText(context, descriptor.uri.toUri(), descriptor.kind)
-            }
-        }
+        runCatching { withContext(Dispatchers.IO) { DocumentEngine.readDocxPage(context, descriptor) } }
+            .onSuccess { page = it }
+            .onFailure { failure = DocumentEngine.unreadableMessage(descriptor.name) }
     }
 
-    if (text == "Loading document…") {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Loading document…", color = ScrittoTextSecondary)
-        }
-        return
-    }
-
-    val rows = remember(text, descriptor.kind) {
-        text.lineSequence()
-            .filter { it.isNotEmpty() }
-            .map { line ->
-                if (descriptor.kind == DocumentKind.CSV) {
-                    parsePreviewCsvRow(line)
-                } else {
-                    line.split("    ")
-                }
-            }
-            .toList()
-    }
-    val columnCount = rows.maxOfOrNull { it.size } ?: 0
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(0.dp))
-    ) {
-        if (rows.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "This document contains no directly previewable data.",
-                    color = ScrittoTextSecondary
-                )
-            }
-        } else {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .horizontalScroll(rememberScrollState())
-                    .verticalScroll(rememberScrollState())
-                    .padding(12.dp)
-            ) {
-                rows.forEachIndexed { rowIndex, row ->
-                    Row {
-                        repeat(columnCount) { columnIndex ->
-                            val value = row.getOrNull(columnIndex).orEmpty()
-                            Box(
-                                Modifier
-                                    .width(150.dp)
-                                    .heightIn(min = 44.dp)
-                                    .background(
-                                        if (rowIndex == 0) {
-                                            ScrittoAmber.copy(alpha = 0.12f)
-                                        } else {
-                                            ScrittoSurface.copy(alpha = 0.72f)
-                                        }
-                                    )
-                                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    value,
-                                    color = if (rowIndex == 0) ScrittoCreamBright else ScrittoCream,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (rowIndex == 0) FontWeight.SemiBold else FontWeight.Normal,
-                                    maxLines = 3,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+    val loaded = page
+    if (loaded == null) {
+        Text(
+            failure ?: "Loading document…",
+            color = ScrittoTextSecondary,
+            modifier = Modifier.padding(20.dp)
+        )
+    } else {
+        PaperSheet {
+            DocxPageView(
+                page = loaded,
+                paragraphs = loaded.paragraphs,
+                tables = loaded.tables,
+                editable = false
+            )
         }
     }
 }
 
-private fun parsePreviewCsvRow(line: String): List<String> {
-    val result = mutableListOf<String>()
-    val current = StringBuilder()
-    var quoted = false
-    var index = 0
-    while (index < line.length) {
-        val char = line[index]
-        when {
-            char == '"' -> {
-                if (quoted && index + 1 < line.length && line[index + 1] == '"') {
-                    current.append('"')
-                    index++
-                } else {
-                    quoted = !quoted
-                }
-            }
-            char == ',' && !quoted -> {
-                result += current.toString()
-                current.clear()
-            }
-            else -> current.append(char)
-        }
-        index++
+@Composable
+private fun SheetPreview(descriptor: DocumentDescriptor) {
+    val context = LocalContext.current
+    var sheets by remember(descriptor.uri) { mutableStateOf<List<SheetData>?>(null) }
+    var selected by remember(descriptor.uri) { mutableStateOf(0) }
+    var failure by remember(descriptor.uri) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(descriptor.uri) {
+        runCatching { withContext(Dispatchers.IO) { DocumentEngine.readSheets(context, descriptor) } }
+            .onSuccess { sheets = it }
+            .onFailure { failure = DocumentEngine.unreadableMessage(descriptor.name) }
     }
-    result += current.toString()
-    return result
+
+    val loaded = sheets
+    if (loaded == null) {
+        Text(
+            failure ?: "Loading document…",
+            color = ScrittoTextSecondary,
+            modifier = Modifier.padding(20.dp)
+        )
+    } else {
+        Box(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp)) {
+            SheetGridView(
+                sheets = loaded,
+                selected = selected,
+                onSelect = { selected = it },
+                editable = false
+            )
+        }
+    }
 }
 
 @Composable
 private fun PdfDocumentPreview(descriptor: DocumentDescriptor) {
     val context = LocalContext.current
     var pageCount by remember(descriptor.uri) { mutableStateOf(0) }
+    var failure by remember(descriptor.uri) { mutableStateOf<String?>(null) }
     var fd by remember(descriptor.uri) { mutableStateOf<ParcelFileDescriptor?>(null) }
     var renderer by remember(descriptor.uri) { mutableStateOf<PdfRenderer?>(null) }
+    // PdfRenderer can have only one page open at a time, so page renders take turns.
+    val renderLock = remember(descriptor.uri) { Mutex() }
 
     LaunchedEffect(descriptor.uri) {
         withContext(Dispatchers.IO) {
             runCatching {
-                val fileDescriptor =
-                    context.contentResolver.openFileDescriptor(descriptor.uri.toUri(), "r")
-                        ?: return@runCatching
+                val fileDescriptor = context.contentResolver.openFileDescriptor(descriptor.uri.toUri(), "r")
+                    ?: error("missing")
                 val pdf = PdfRenderer(fileDescriptor)
                 fd = fileDescriptor
                 renderer = pdf
                 pageCount = pdf.pageCount
+            }.onFailure {
+                failure = DocumentEngine.unreadableMessage(descriptor.name)
             }
         }
     }
@@ -471,45 +438,75 @@ private fun PdfDocumentPreview(descriptor: DocumentDescriptor) {
         }
     }
 
+    val failed = failure
+    if (failed != null) {
+        Text(
+            failed,
+            color = androidx.compose.ui.graphics.Color(0xFF6B6B6B),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color.White)
+                .padding(20.dp)
+        )
+        return
+    }
+
     LazyColumn(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(top = 4.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .background(androidx.compose.ui.graphics.Color.White),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(pageCount) { pageIndex ->
-            PdfPage(renderer, pageIndex)
+            PdfPage(renderer, renderLock, pageIndex)
         }
     }
 }
 
 @Composable
-private fun PdfPage(renderer: PdfRenderer?, pageIndex: Int) {
+private fun PdfPage(renderer: PdfRenderer?, renderLock: Mutex, pageIndex: Int) {
     var bitmap by remember(pageIndex, renderer) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(renderer, pageIndex) {
-        withContext(Dispatchers.IO) {
-            runCatching {
-                renderer?.openPage(pageIndex)?.use { page ->
-                    val width = 900
-                    val scale = width.toFloat() / page.width.coerceAtLeast(1)
-                    val height = (page.height * scale).toInt()
-                    Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
-                        page.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        bitmap = it
+        val source = renderer ?: return@LaunchedEffect
+        val rendered = withContext(Dispatchers.IO) {
+            renderLock.withLock {
+                runCatching {
+                    source.openPage(pageIndex).use { page ->
+                        val width = 1000
+                        val height = (page.height * width.toFloat() / page.width.coerceAtLeast(1)).toInt()
+                        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { target ->
+                            target.eraseColor(android.graphics.Color.WHITE)
+                            page.render(target, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        }
                     }
-                }
+                }.getOrNull()
             }
         }
+        bitmap = rendered
     }
 
-    bitmap?.let {
-        Image(
-            it.asImageBitmap(),
-            "PDF page " + (pageIndex + 1),
+    val loaded = bitmap
+    if (loaded == null) {
+        Box(
             Modifier
                 .fillMaxWidth()
+                .height(360.dp)
+                .background(androidx.compose.ui.graphics.Color(0xFFF4F4F4)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Page ${pageIndex + 1}…", color = androidx.compose.ui.graphics.Color(0xFF9A9A9A), fontSize = 12.sp)
+        }
+    } else {
+        Image(
+            bitmap = loaded.asImageBitmap(),
+            contentDescription = "PDF page " + (pageIndex + 1),
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(3.dp)
+                .background(androidx.compose.ui.graphics.Color.White)
         )
     }
 }
@@ -546,14 +543,5 @@ private fun ImageDocumentPreview(descriptor: DocumentDescriptor) {
 }
 
 private fun shareUri(context: Context, uri: Uri, name: String) {
-    context.startActivity(
-        Intent.createChooser(
-            Intent(Intent.ACTION_SEND).apply {
-                type = context.contentResolver.getType(uri) ?: "*/*"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            },
-            "Share " + name
-        )
-    )
+    context.startActivity(DocumentShare.shareIntent(context, uri, name))
 }

@@ -81,7 +81,8 @@ object DocumentTypes {
             }
         }
         val editable = kind in setOf(
-            DocumentKind.CSV, DocumentKind.XLSX, DocumentKind.DOCX, DocumentKind.PDF, DocumentKind.IMAGE
+            DocumentKind.TEXT, DocumentKind.CSV, DocumentKind.XLSX, DocumentKind.DOCX,
+            DocumentKind.PDF, DocumentKind.IMAGE
         )
         return DocumentDescriptor(
             name = name,
@@ -93,7 +94,10 @@ object DocumentTypes {
                 specialName == ".gitignore" || specialName == ".gitattributes" -> "Git"
                 else -> codeLanguages[extension]
             },
-            capabilities = DocumentCapabilities(editable, editable)
+            capabilities = DocumentCapabilities(
+                canEdit = editable,
+                canConvert = conversionTargets(kind).isNotEmpty()
+            )
         )
     }
 }

@@ -42,6 +42,15 @@ import androidx.compose.material.icons.automirrored.outlined.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.outlined.FormatAlignRight
 import androidx.compose.material.icons.outlined.FormatClear
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.widthIn
+import com.internship.scritto.data.model.NoteFile
+import com.internship.scritto.ui.theme.ScrittoSurface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -86,7 +95,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun NoteEditorScreen(
     noteId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenFile: (NoteFile) -> Unit = {}
 ) {
     val view = LocalView.current
 
@@ -124,6 +134,8 @@ fun NoteEditorScreen(
     var isPinned by rememberSaveable(noteId) {
         mutableStateOf(note.isPinned)
     }
+
+    var noteFiles by remember(noteId) { mutableStateOf(note.files) }
 
     // The toolbar can temporarily take the pointer interaction away from
     // the editor. Keep the last real editor selection so formatting is
@@ -395,7 +407,9 @@ fun NoteEditorScreen(
                     fontSize = 31.sp,
                     lineHeight = 38.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = (-0.3).sp
+                    letterSpacing = (-0.3).sp,
+                    // Title and body share one alignment, as in the note list.
+                    textAlign = textAlign
                 ),
                 cursorBrush = SolidColor(
                     ScrittoCreamBright
@@ -422,7 +436,9 @@ fun NoteEditorScreen(
                                 color = ScrittoTextMuted,
                                 fontSize = 31.sp,
                                 lineHeight = 38.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = textAlign,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
 
@@ -432,7 +448,25 @@ fun NoteEditorScreen(
             )
 
             Spacer(
-                modifier = Modifier.height(26.dp)
+                modifier = Modifier.height(20.dp)
+            )
+
+            // ----------------------------------------------------------------
+            // REFERENCES: imported files this note refers to
+            // ----------------------------------------------------------------
+
+            NoteReferences(
+                files = noteFiles,
+                onOpen = onOpenFile,
+                onRemove = { file ->
+                    noteFiles = noteFiles - file
+                    ScrittoStore.setNoteFiles(noteId, noteFiles)
+                },
+                onAdd = { noteFiles = noteFiles + it }
+            )
+
+            Spacer(
+                modifier = Modifier.height(22.dp)
             )
 
             // ----------------------------------------------------------------
@@ -498,7 +532,9 @@ fun NoteEditorScreen(
                                 text = "Start writing…",
                                 color = ScrittoTextMuted,
                                 fontSize = 18.sp,
-                                lineHeight = 30.sp
+                                lineHeight = 30.sp,
+                                textAlign = textAlign,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
 
@@ -551,6 +587,119 @@ fun NoteEditorScreen(
                 }
             )
         }
+    }
+}
+
+// ========================================================================
+// FILE REFERENCES
+// ========================================================================
+
+/**
+ * The imported files a note refers to. Tap a chip to open the file, × to unlink it,
+ * "Add reference" to pick from Files. Changes are saved straight away.
+ */
+@Composable
+private fun NoteReferences(
+    files: List<NoteFile>,
+    onOpen: (NoteFile) -> Unit,
+    onRemove: (NoteFile) -> Unit,
+    onAdd: (NoteFile) -> Unit
+) {
+    var choosing by remember { mutableStateOf(false) }
+    val available = ScrittoStore.importedFiles.filter { imported ->
+        files.none { it.uri == imported.uri }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        files.forEach { file ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, ScrittoBorder, RoundedCornerShape(14.dp))
+                    .background(ScrittoSurface.copy(alpha = 0.7f))
+                    .clickable { onOpen(file) }
+                    .padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Description,
+                    contentDescription = null,
+                    tint = ScrittoAmber,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    file.name,
+                    color = ScrittoCream,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier.widthIn(max = 180.dp)
+                )
+                IconButton(onClick = { onRemove(file) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Remove reference",
+                        tint = ScrittoTextSecondary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+        }
+
+        if (available.isNotEmpty() || files.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, ScrittoBorder, RoundedCornerShape(14.dp))
+                    .clickable(enabled = available.isNotEmpty()) { choosing = true }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = null,
+                    tint = ScrittoAmber,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (files.isEmpty() && available.isEmpty()) "Import a file in Files to reference it" else "Add reference",
+                    color = ScrittoTextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+
+    if (choosing) {
+        AlertDialog(
+            onDismissRequest = { choosing = false },
+            title = { Text("Reference a file") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    available.forEach { file ->
+                        TextButton(
+                            onClick = {
+                                onAdd(NoteFile(file.name, file.uri))
+                                choosing = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(file.name, maxLines = 1)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { choosing = false }) { Text("Close") }
+            }
+        )
     }
 }
 

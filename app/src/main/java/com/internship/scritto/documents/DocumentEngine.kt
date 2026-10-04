@@ -7,48 +7,81 @@ import android.net.Uri
 import androidx.core.net.toUri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
+import com.tom_roush.pdfbox.pdmodel.font.PDFont
+import com.tom_roush.pdfbox.pdmodel.font.PDType0Font
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.text.PDFTextStripper
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import org.apache.poi.xwpf.usermodel.XWPFDocument
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
-import kotlin.math.max
 
 object DocumentEngine {
+
+    /** Text shown in the editor for a file. Matches what [saveEditedText] writes back. */
     fun readEditableText(context: Context, descriptor: DocumentDescriptor): String {
+        val uri = descriptor.uri.toUri()
         return when (descriptor.kind) {
-            DocumentKind.CSV -> DocumentReader.readText(context, descriptor.uri.toUri())
-            DocumentKind.DOCX -> context.contentResolver.openInputStream(descriptor.uri.toUri())?.use { input ->
-                XWPFDocument(input).use { doc ->
-                    doc.paragraphs.joinToString("\n") { it.text } +
-                        doc.tables.flatMap { table ->
-                            table.rows.flatMap { row ->
-                                row.tableCells.map { it.text }
-                            }
-                        }.joinToString("\n", prefix = if (doc.tables.isNotEmpty()) "\n" else "")
-                }
-            }.orEmpty()
-            DocumentKind.XLSX -> context.contentResolver.openInputStream(descriptor.uri.toUri())?.use { input ->
-                XSSFWorkbook(input).use { workbook ->
-                    val sheet = workbook.getSheetAt(0)
-                    buildString {
-                        for (row in sheet) {
-                            val last = row.lastCellNum.toInt().coerceAtLeast(0)
-                            for (column in 0 until last) {
-                                if (column > 0) append(',')
-                                append(csvEscape(row.getCell(column)?.toString().orEmpty()))
-                            }
-                            append('\n')
-                        }
-                    }.trimEnd()
-                }
-            }.orEmpty()
-            DocumentKind.PDF -> readPdfText(context, descriptor.uri.toUri())
+            DocumentKind.CSV -> DocumentReader.readText(context, uri)
+            DocumentKind.DOCX -> context.contentResolver.openInputStream(uri)
+                ?.use { OfficeTextCodec.docxToText(it) }.orEmpty()
+            DocumentKind.XLSX -> context.contentResolver.openInputStream(uri)
+                ?.use { DelimitedText.serialize(OfficeTextCodec.xlsxToRows(it)) }.orEmpty()
+            DocumentKind.PDF -> readPdfText(context, uri)
+            DocumentKind.TEXT -> DocumentReader.readText(context, uri)
             else -> ""
+        }
+    }
+
+    /** What to show when a file cannot be read. Damaged or renamed files throw inside the parsers. */
+    fun unreadableMessage(name: String): String =
+        "“$name” could not be opened. It may be damaged, password-protected, or not a valid file of this type."
+
+    /** A Word document as a page (paragraphs, tables, headers, footers) for the viewer and editor. */
+    fun readDocxPage(context: Context, descriptor: DocumentDescriptor): DocxPage =
+        context.contentResolver.openInputStream(descriptor.uri.toUri())?.use { OfficeTextCodec.docxPage(it) }
+            ?: DocxPage("", "", emptyList(), emptyList(), emptyList())
+
+    /** Every sheet of a spreadsheet (CSV has one). */
+    fun readSheets(context: Context, descriptor: DocumentDescriptor): List<SheetData> {
+        val uri = descriptor.uri.toUri()
+        return when (descriptor.kind) {
+            DocumentKind.XLSX -> context.contentResolver.openInputStream(uri)
+                ?.use { OfficeTextCodec.xlsxSheets(it) }.orEmpty()
+            else -> listOf(SheetData("Sheet1", DelimitedText.parse(DocumentReader.readText(context, uri))))
+        }
+    }
+
+    /** Renders an edited Word page into memory, ready to be written. */
+    fun renderDocxPage(
+        context: Context,
+        descriptor: DocumentDescriptor,
+        paragraphs: List<DocxParagraph>,
+        tables: List<DocxTable>
+    ): ByteArray = toBytes { output ->
+        withSource(context, descriptor.uri.toUri()) { source ->
+            OfficeTextCodec.writeDocxPage(source, paragraphs, tables, output)
+        }
+    }
+
+    /** Renders edited sheets into memory: all sheets for XLSX, the single table for CSV. */
+    fun renderSheets(
+        context: Context,
+        descriptor: DocumentDescriptor,
+        sheets: List<SheetData>
+    ): ByteArray = toBytes { output ->
+        when (descriptor.kind) {
+            DocumentKind.XLSX -> withSource(context, descriptor.uri.toUri()) { source ->
+                OfficeTextCodec.writeXlsxSheets(source, sheets, output)
+            }
+            else -> output.write(
+                DelimitedText.serialize(sheets.firstOrNull()?.rows.orEmpty()).toByteArray(StandardCharsets.UTF_8)
+            )
         }
     }
 
@@ -59,19 +92,49 @@ object DocumentEngine {
         }.orEmpty()
     }
 
+    /** Writes edited [text] in the format of [descriptor] to [output]. */
     fun saveEditedText(
         context: Context,
         descriptor: DocumentDescriptor,
         text: String,
         output: OutputStream
     ) {
+        val uri = descriptor.uri.toUri()
         when (descriptor.kind) {
-            DocumentKind.CSV -> output.write(text.toByteArray(StandardCharsets.UTF_8))
-            DocumentKind.DOCX -> writeDocx(context, descriptor.uri.toUri(), text, output)
-            DocumentKind.XLSX -> writeXlsx(context, descriptor.uri.toUri(), text, output)
-            DocumentKind.PDF -> writePdfText(context, descriptor.uri.toUri(), text, output)
+            DocumentKind.DOCX -> withSource(context, uri) { source ->
+                OfficeTextCodec.textToDocx(source, text, output)
+            }
+            DocumentKind.XLSX -> withSource(context, uri) { source ->
+                OfficeTextCodec.rowsToXlsx(source, DelimitedText.parse(text), output)
+            }
+            DocumentKind.PDF -> writeTextPdf(context, text, output)
             else -> output.write(text.toByteArray(StandardCharsets.UTF_8))
         }
+    }
+
+    /** Renders an edit into memory so the file can be written in one go. */
+    fun renderEditedText(
+        context: Context,
+        descriptor: DocumentDescriptor,
+        text: String
+    ): ByteArray = toBytes { saveEditedText(context, descriptor, text, it) }
+
+    /** Renders a conversion into memory, ready to be written to a new file. */
+    fun renderConversion(
+        context: Context,
+        descriptor: DocumentDescriptor,
+        targetExtension: String
+    ): ByteArray = toBytes { convert(context, descriptor, targetExtension, it) }
+
+    /** True when the app was granted write access to [uri] (see FilesScreen). */
+    fun canWriteInPlace(context: Context, uri: Uri): Boolean =
+        context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
+
+    /** Replaces the content of [uri] with [bytes]. Callers render first, so a failure cannot leave a half-written file. */
+    fun writeInPlace(context: Context, uri: Uri, bytes: ByteArray) {
+        val output = context.contentResolver.openOutputStream(uri, "wt")
+            ?: error("The file cannot be opened for writing")
+        output.use { it.write(bytes) }
     }
 
     fun convert(
@@ -80,29 +143,38 @@ object DocumentEngine {
         targetExtension: String,
         output: OutputStream
     ) {
+        val uri = descriptor.uri.toUri()
         when (descriptor.kind) {
             DocumentKind.CSV -> when (targetExtension) {
-                "xlsx" -> writeXlsxFromCsv(DocumentReader.readText(context, descriptor.uri.toUri()), output)
-                "txt" -> output.write(DocumentReader.readText(context, descriptor.uri.toUri()).toByteArray())
-                else -> output.write(DocumentReader.readText(context, descriptor.uri.toUri()).toByteArray())
+                "xlsx" -> OfficeTextCodec.rowsToXlsx(
+                    null,
+                    DelimitedText.parse(DocumentReader.readText(context, uri)),
+                    output
+                )
+                else -> output.write(DocumentReader.readText(context, uri).toByteArray(StandardCharsets.UTF_8))
             }
-            DocumentKind.XLSX -> when (targetExtension) {
-                "csv" -> output.write(readXlsxAsCsv(context, descriptor.uri.toUri()).toByteArray())
-                "txt" -> output.write(readXlsxAsCsv(context, descriptor.uri.toUri()).toByteArray())
-                else -> output.write(readXlsxAsCsv(context, descriptor.uri.toUri()).toByteArray())
+            DocumentKind.XLSX -> {
+                val csv = context.contentResolver.openInputStream(uri)
+                    ?.use { DelimitedText.serialize(OfficeTextCodec.xlsxToRows(it)) }.orEmpty()
+                output.write(csv.toByteArray(StandardCharsets.UTF_8))
             }
-            DocumentKind.DOCX -> when (targetExtension) {
-                "pdf" -> writePdfText(context, null, readDocx(context, descriptor.uri.toUri()), output)
-                "txt" -> output.write(readDocx(context, descriptor.uri.toUri()).toByteArray())
-                else -> output.write(readDocx(context, descriptor.uri.toUri()).toByteArray())
+            DocumentKind.DOCX -> {
+                val text = context.contentResolver.openInputStream(uri)
+                    ?.use { OfficeTextCodec.docxToText(it) }.orEmpty()
+                when (targetExtension) {
+                    "pdf" -> writeTextPdf(context, text, output)
+                    else -> output.write(text.toByteArray(StandardCharsets.UTF_8))
+                }
             }
-            DocumentKind.PDF -> when (targetExtension) {
-                "txt" -> output.write(readPdfText(context, descriptor.uri.toUri()).toByteArray())
-                "docx" -> writeDocxFromText(readPdfText(context, descriptor.uri.toUri()), output)
-                else -> output.write(readPdfText(context, descriptor.uri.toUri()).toByteArray())
+            DocumentKind.PDF -> {
+                val text = readPdfText(context, uri)
+                when (targetExtension) {
+                    "docx" -> OfficeTextCodec.textToDocx(null, text, output)
+                    else -> output.write(text.toByteArray(StandardCharsets.UTF_8))
+                }
             }
             DocumentKind.IMAGE -> {
-                val bitmap = context.contentResolver.openInputStream(descriptor.uri.toUri())?.use {
+                val bitmap = context.contentResolver.openInputStream(uri)?.use {
                     android.graphics.BitmapFactory.decodeStream(it)
                 } ?: error("Unable to decode image")
                 val format = when (targetExtension.lowercase()) {
@@ -113,7 +185,7 @@ object DocumentEngine {
                 bitmap.compress(format, 92, output)
                 bitmap.recycle()
             }
-            else -> output.write(DocumentReader.readText(context, descriptor.uri.toUri()).toByteArray())
+            else -> output.write(DocumentReader.readText(context, uri).toByteArray(StandardCharsets.UTF_8))
         }
     }
 
@@ -160,176 +232,102 @@ object DocumentEngine {
         source.recycle()
     }
 
-    private fun writeDocx(
-        context: Context,
-        sourceUri: Uri,
-        text: String,
-        output: OutputStream
-    ) {
-        val doc = context.contentResolver.openInputStream(sourceUri)?.use { XWPFDocument(it) }
-            ?: XWPFDocument()
-
-        val lines = text.replace("\r\n", "\n").split("\n")
-        val paragraphs = doc.paragraphs.toMutableList()
-
-        lines.forEachIndexed { index, line ->
-            val paragraph = paragraphs.getOrNull(index) ?: doc.createParagraph()
-            while (paragraph.runs.isNotEmpty()) paragraph.removeRun(0)
-            paragraph.createRun().setText(line)
-        }
-
-        while (doc.paragraphs.size > lines.size && doc.paragraphs.isNotEmpty()) {
-            doc.removeBodyElement(doc.bodyElements.lastIndex)
-        }
-
-        doc.write(output)
-        doc.close()
-    }
-
-    private fun writeDocxFromText(text: String, output: OutputStream) {
-        XWPFDocument().use { doc ->
-            text.replace("\r\n", "\n").split("\n").forEach { line ->
-                doc.createParagraph().createRun().setText(line)
-            }
-            doc.write(output)
-        }
-    }
-
-    private fun readDocx(context: Context, uri: Uri): String =
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            XWPFDocument(input).use { doc ->
-                doc.paragraphs.joinToString("\n") { it.text }
-            }
-        }.orEmpty()
-
-    private fun writeXlsx(
-        context: Context,
-        sourceUri: Uri,
-        text: String,
-        output: OutputStream
-    ) {
-        context.contentResolver.openInputStream(sourceUri)?.use { input ->
-            XSSFWorkbook(input).use { workbook ->
-                val sheet = workbook.getSheetAt(0)
-                while (sheet.lastRowNum >= 0) {
-                    val row = sheet.getRow(sheet.lastRowNum) ?: break
-                    sheet.removeRow(row)
-                    if (sheet.lastRowNum == 0 && sheet.getRow(0) == null) break
-                }
-
-                text.replace("\r\n", "\n").split("\n").forEachIndexed { rowIndex, line ->
-                    val row = sheet.getRow(rowIndex) ?: sheet.createRow(rowIndex)
-                    parseCsvLine(line).forEachIndexed { columnIndex, value ->
-                        row.getCell(columnIndex) ?: row.createCell(columnIndex)
-                        row.getCell(columnIndex).setCellValue(value)
-                    }
-                }
-                workbook.write(output)
-            }
-        } ?: writeXlsxFromCsv(text, output)
-    }
-
-    private fun writeXlsxFromCsv(text: String, output: OutputStream) {
-        XSSFWorkbook().use { workbook ->
-            val sheet = workbook.createSheet("Scritto")
-            text.replace("\r\n", "\n").split("\n").forEachIndexed { rowIndex, line ->
-                val row = sheet.createRow(rowIndex)
-                parseCsvLine(line).forEachIndexed { columnIndex, value ->
-                    row.createCell(columnIndex).setCellValue(value)
-                }
-            }
-            workbook.write(output)
-        }
-    }
-
-    private fun readXlsxAsCsv(context: Context, uri: Uri): String =
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            XSSFWorkbook(input).use { workbook ->
-                val sheet = workbook.getSheetAt(0)
-                buildString {
-                    for (row in sheet) {
-                        val last = row.lastCellNum.toInt().coerceAtLeast(0)
-                        for (column in 0 until last) {
-                            if (column > 0) append(',')
-                            append(csvEscape(row.getCell(column)?.toString().orEmpty()))
-                        }
-                        append('\n')
-                    }
-                }.trimEnd()
-            }
-        }.orEmpty()
-
-    private fun parseCsvLine(line: String): List<String> {
-        val result = mutableListOf<String>()
-        val current = StringBuilder()
-        var quoted = false
-        var index = 0
-        while (index < line.length) {
-            val char = line[index]
-            when {
-                char == '"' -> {
-                    if (quoted && index + 1 < line.length && line[index + 1] == '"') {
-                        current.append('"')
-                        index++
-                    } else {
-                        quoted = !quoted
-                    }
-                }
-                char == ',' && !quoted -> {
-                    result += current.toString()
-                    current.clear()
-                }
-                else -> current.append(char)
-            }
-            index++
-        }
-        result += current.toString()
-        return result
-    }
-
-    private fun csvEscape(value: String): String =
-        if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-            "\"" + value.replace("\"", "\"\"") + "\""
-        } else value
-
-    private fun writePdfText(
-        context: Context,
-        sourceUri: Uri?,
-        text: String,
-        output: OutputStream
-    ) {
+    /**
+     * Plain text as a multi-page A4 PDF. Long lines wrap and text continues onto new pages.
+     * Uses a Unicode system font when one is available; otherwise characters outside the
+     * Latin range are replaced with "?" rather than silently dropped.
+     */
+    private fun writeTextPdf(context: Context, text: String, output: OutputStream) {
         initPdf(context)
-        val document = if (sourceUri != null) {
-            context.contentResolver.openInputStream(sourceUri)?.use { PDDocument.load(it) }
-                ?: PDDocument()
-        } else {
-            PDDocument()
-        }
+        val fontSize = 11f
+        val leading = 15f
+        val margin = 50f
+        val pageSize = PDRectangle.A4
+        val maxWidth = pageSize.width - margin * 2
+        val linesPerPage = ((pageSize.height - margin * 2) / leading).toInt().coerceAtLeast(1)
 
-        if (document.numberOfPages == 0) document.addPage(com.tom_roush.pdfbox.pdmodel.PDPage(PDRectangle.A4))
+        PDDocument().use { document ->
+            val font = PdfFonts.load(document)
+            val clean: (String) -> String = { PdfFonts.sanitize(font, it) }
 
-        val page = document.getPage(0)
-        PDPageContentStream(
-            document,
-            page,
-            PDPageContentStream.AppendMode.APPEND,
-            true,
-            true
-        ).use { stream ->
-            stream.beginText()
-            stream.setFont(PDType1Font.HELVETICA, 10f)
-            stream.setLeading(14f)
-            stream.newLineAtOffset(40f, page.mediaBox.height - 50f)
-            text.replace("\r\n", "\n").split("\n").take(45).forEach { line ->
-                stream.showText(line.filter { it.code in 32..126 })
-                stream.newLine()
+            val lines = wrap(
+                text.replace("\r\n", "\n").split("\n"),
+                font,
+                fontSize,
+                maxWidth,
+                clean
+            )
+
+            lines.chunked(linesPerPage).ifEmpty { listOf(emptyList()) }.forEach { pageLines ->
+                val page = PDPage(pageSize)
+                document.addPage(page)
+                PDPageContentStream(document, page).use { stream ->
+                    stream.beginText()
+                    stream.setFont(font, fontSize)
+                    stream.setLeading(leading)
+                    stream.newLineAtOffset(margin, pageSize.height - margin)
+                    pageLines.forEach { line ->
+                        stream.showText(line)
+                        stream.newLine()
+                    }
+                    stream.endText()
+                }
             }
-            stream.endText()
-        }
 
-        document.save(output)
-        document.close()
+            document.save(output)
+        }
     }
+
+    /** Greedy word wrap. A word longer than the line is broken by characters. */
+    private fun wrap(
+        paragraphs: List<String>,
+        font: PDFont,
+        fontSize: Float,
+        maxWidth: Float,
+        clean: (String) -> String
+    ): List<String> {
+        fun width(value: String) = font.getStringWidth(value) / 1000f * fontSize
+
+        val out = mutableListOf<String>()
+        paragraphs.forEach { paragraph ->
+            var current = ""
+            clean(paragraph).split(' ').forEach { word ->
+                val candidate = if (current.isEmpty()) word else "$current $word"
+                if (width(candidate) <= maxWidth) {
+                    current = candidate
+                    return@forEach
+                }
+                if (current.isNotEmpty()) out += current
+
+                var rest = word
+                while (width(rest) > maxWidth && rest.length > 1) {
+                    var cut = rest.length - 1
+                    while (cut > 1 && width(rest.substring(0, cut)) > maxWidth) cut--
+                    out += rest.substring(0, cut)
+                    rest = rest.substring(cut)
+                }
+                current = rest
+            }
+            out += current
+        }
+        return out
+    }
+
+    /** Opens [uri] for reading, or passes null when it cannot be opened, and always closes it. */
+    private inline fun <T> withSource(context: Context, uri: Uri, block: (InputStream?) -> T): T {
+        val source = context.contentResolver.openInputStream(uri)
+        try {
+            return block(source)
+        } finally {
+            source?.close()
+        }
+    }
+
+    private fun toBytes(block: (OutputStream) -> Unit): ByteArray =
+        ByteArrayOutputStream().use { buffer ->
+            block(buffer)
+            buffer.toByteArray()
+        }
 
     private fun initPdf(context: Context) {
         PDFBoxResourceLoader.init(context.applicationContext)

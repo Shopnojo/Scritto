@@ -142,6 +142,41 @@ object AssistantToolSpec {
                         stringParam("file_name", "File name, as returned by list_files.", required = true)
                     ),
                     declare(
+                        "get_pdf_text",
+                        "Read the text of a PDF's pages, on the device (cheap). Call this before edit_pdf so you quote the exact text. " +
+                            "Read only the pages you need; the result is capped, so ask for a smaller page range if it is truncated.",
+                        stringParam("file_name", "PDF file name, as returned by list_files.", required = true),
+                        intParam("from_page", "First page, starting at 1. Default 1."),
+                        intParam("to_page", "Last page. Default: the last page.")
+                    ),
+                    declare(
+                        "edit_pdf",
+                        "Edit an imported PDF as the user asked, in ONE call with all the changes. The result is a NEW file " +
+                            "(the original is never changed) that appears in Files. Use only the changes the user requested.",
+                        stringParam("file_name", "PDF file name, as returned by list_files.", required = true),
+                        objectArrayParam(
+                            name = "operations",
+                            description = "The changes, applied in order. At most 20.",
+                            required = true,
+                            fields = listOf(
+                                stringParam(
+                                    "op",
+                                    "replace_text: replace find with replace. add_text: write text at a position. highlight: mark find in yellow.",
+                                    required = true,
+                                    enum = listOf("replace_text", "add_text", "highlight")
+                                ),
+                                intParam("page", "Page number, starting at 1.", required = true),
+                                stringParam("find", "Exact text on the page (copied from get_pdf_text). Needed for replace_text and highlight."),
+                                stringParam("replace", "New text for replace_text. May be empty to delete the found text."),
+                                stringParam("text", "Text to add for add_text."),
+                                intParam("x_percent", "add_text: distance from the left edge, 0-100. Default 10."),
+                                intParam("y_percent", "add_text: distance from the top edge, 0-100. Default 10."),
+                                intParam("size", "add_text: font size in points, 6-40. Default 12.")
+                            ),
+                            requiredFields = listOf("op", "page")
+                        )
+                    ),
+                    declare(
                         "navigate",
                         "Open a screen in the app.",
                         stringParam(

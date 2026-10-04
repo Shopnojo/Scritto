@@ -1,123 +1,194 @@
 package com.internship.scritto.documents
 
 import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.outlined.FormatAlignRight
+import androidx.compose.material.icons.outlined.FormatAlignCenter
+import androidx.compose.material.icons.outlined.FormatClear
 import androidx.compose.material.icons.outlined.Save
-import androidx.compose.material3.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import com.internship.scritto.notes.NoteRichText
 import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.poi.xwpf.usermodel.XWPFDocument
-import java.io.OutputStream
 
-private data class DocxParagraphBlock(val index: Int, val text: String, val style: String)
-private data class DocxTableBlock(val index: Int, val rows: List<List<String>>)
-
+/**
+ * Word document editor: the whole document on a white page, in reading order. Paragraphs,
+ * lists, tables, headers and footers are shown and editable. The toolbar formats the paragraph
+ * you are typing in (bold, italic, underline, strike, alignment); Save writes it back.
+ */
 @Composable
 fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Modifier = Modifier) {
-    val paragraphs = remember(descriptor.uri) { mutableStateListOf<DocxParagraphBlock>() }
-    val tables = remember(descriptor.uri) { mutableStateListOf<DocxTableBlock>() }
-    var loaded by remember(descriptor.uri) { mutableStateOf(false) }
+    var page by remember(descriptor.uri) { mutableStateOf<DocxPage?>(null) }
+    var paragraphs by remember(descriptor.uri) { mutableStateOf(emptyList<DocxParagraph>()) }
+    var tables by remember(descriptor.uri) { mutableStateOf(emptyList<DocxTable>()) }
     var status by remember(descriptor.uri) { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    ) { destination ->
-        if (destination != null) scope.launch {
-            status = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openOutputStream(destination)?.use {
-                        saveDocx(context, descriptor.uri.toUri(), paragraphs.toList(), tables.toList(), it)
-                    } ?: error("Could not open destination")
-                    "Saved"
-                }.getOrElse { "Could not save DOCX" }
+    var failure by remember(descriptor.uri) { mutableStateOf<String?>(null) }
+    // Editing value per paragraph (text, formatting and caret), keyed by paragraph index.
+    val fields = remember(descriptor.uri) { mutableStateMapOf<Int, TextFieldValue>() }
+    var focused by remember(descriptor.uri) { mutableStateOf<Int?>(null) }
+    // A toolbar style tapped with no text selected: applies to the next typed characters.
+    var pending by remember(descriptor.uri) { mutableStateOf<Int?>(null) }
+    val saver = rememberDocumentSaver(descriptor.uri.toUri()) { status = it }
+
+    LaunchedEffect(descriptor.uri) {
+        runCatching { withContext(Dispatchers.IO) { DocumentEngine.readDocxPage(context, descriptor) } }
+            .onSuccess { loaded ->
+                page = loaded
+                paragraphs = loaded.paragraphs
+                tables = loaded.tables
             }
+            .onFailure { failure = DocumentEngine.unreadableMessage(descriptor.name) }
+    }
+
+    fun valueOf(index: Int): TextFieldValue {
+        fields[index]?.let { return it }
+        val paragraph = paragraphs.firstOrNull { it.index == index } ?: return TextFieldValue()
+        return NoteRichText.valueFrom(paragraph.text, paragraph.spans)
+    }
+
+    /** Keeps the paragraph model in step with what is on screen. */
+    fun sync(index: Int, value: TextFieldValue, align: String? = null) {
+        paragraphs = paragraphs.map {
+            if (it.index != index) it
+            else it.copy(
+                text = value.text,
+                spans = NoteRichText.toSpans(value.annotatedString),
+                align = align ?: it.align
+            )
         }
     }
 
-    LaunchedEffect(descriptor.uri) {
-        val result = withContext(Dispatchers.IO) { readDocx(context, descriptor.uri.toUri()) }
-        paragraphs.clear(); paragraphs.addAll(result.first)
-        tables.clear(); tables.addAll(result.second)
-        loaded = true
+    fun fieldChanged(index: Int, incoming: TextFieldValue) {
+        val result = NoteRichText.reconcile(valueOf(index), incoming, pending)
+        fields[index] = result.value
+        pending = result.pending
+        sync(index, result.value)
     }
 
+    fun applyToFocused(transform: (TextFieldValue) -> NoteRichText.Result) {
+        val index = focused ?: return
+        val result = transform(valueOf(index))
+        fields[index] = result.value
+        pending = result.pending
+        sync(index, result.value)
+    }
+
+    fun setAlign(align: String) {
+        val index = focused ?: return
+        paragraphs = paragraphs.map { if (it.index == index) it.copy(align = align) else it }
+    }
+
+    val focusedValue = focused?.let { valueOf(it) }
+
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DOCX workspace", color = ScrittoCreamBright, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Word document", color = ScrittoCreamBright, fontSize = 16.sp)
             Spacer(Modifier.weight(1f))
-            status?.let { Text(it, color = ScrittoTextSecondary, fontSize = 12.sp); Spacer(Modifier.width(8.dp)) }
+            status?.let {
+                Text(it, color = ScrittoTextSecondary, fontSize = 12.sp)
+                Spacer(Modifier.width(8.dp))
+            }
             IconButton(
                 onClick = {
                     status = null
-                    launcher.launch(descriptor.name.substringBeforeLast('.', descriptor.name) + "_edited.docx")
+                    val snapshotParagraphs = paragraphs
+                    val snapshotTables = tables
+                    saver.save(descriptor.name.substringBeforeLast('.', descriptor.name) + "_edited.docx") {
+                        DocumentEngine.renderDocxPage(context, descriptor, snapshotParagraphs, snapshotTables)
+                    }
                 },
-                enabled = loaded
+                enabled = page != null
             ) { Icon(Icons.Outlined.Save, "Save DOCX", tint = ScrittoCreamBright) }
         }
-        if (!loaded) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading document…", color = ScrittoTextSecondary)
-            }
-        } else {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
-            ) {
-                itemsIndexed(paragraphs, key = { _, p -> "p_${p.index}" }) { pos, block ->
-                    val heading = block.style.contains("Title", true) || block.style.contains("Heading", true)
-                    OutlinedTextField(
-                        value = block.text,
-                        onValueChange = { paragraphs[pos] = block.copy(text = it) },
-                        modifier = Modifier.fillMaxWidth().background(ScrittoSurface.copy(alpha = .58f)),
-                        textStyle = TextStyle(
-                            color = ScrittoCream,
-                            fontSize = when {
-                                block.style.contains("Title", true) -> 22.sp
-                                block.style.contains("Heading 1", true) -> 19.sp
-                                block.style.contains("Heading 2", true) -> 17.sp
-                                else -> 14.sp
-                            },
-                            fontWeight = if (heading) FontWeight.SemiBold else FontWeight.Normal,
-                            lineHeight = 21.sp
-                        ),
-                        label = { if (block.style.isNotBlank()) Text(block.style) },
-                        minLines = if (block.text.isBlank()) 1 else 2
-                    )
+
+        val loaded = page
+        when {
+            loaded == null && failure != null ->
+                Text(failure.orEmpty(), color = ScrittoTextSecondary, modifier = Modifier.padding(20.dp))
+
+            loaded == null ->
+                Column(
+                    Modifier.fillMaxSize().padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = ScrittoAmber)
+                    Spacer(Modifier.height(12.dp))
+                    Text("Loading document…", color = ScrittoTextSecondary)
                 }
-                itemsIndexed(tables, key = { _, t -> "t_${t.index}" }) { tablePos, table ->
-                    Text("Table ${table.index + 1}", color = ScrittoCreamBright, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    table.rows.forEachIndexed { r, row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEachIndexed { c, value ->
-                                OutlinedTextField(
-                                    value = value,
-                                    onValueChange = { newValue ->
-                                        tables[tablePos] = table.copy(rows = table.rows.mapIndexed { ri, cells ->
-                                            if (ri == r) cells.mapIndexed { ci, cell -> if (ci == c) newValue else cell } else cells
-                                        })
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    textStyle = TextStyle(color = ScrittoCream, fontSize = 13.sp)
-                                )
+
+            else -> {
+                FormatBar(
+                    enabled = focused != null,
+                    value = focusedValue,
+                    pending = pending,
+                    onStyle = { style -> applyToFocused { NoteRichText.toggle(it, style, pending) } },
+                    onClear = { applyToFocused { NoteRichText.clearFormatting(it) } },
+                    onAlign = { setAlign(it) }
+                )
+
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    PaperSheet {
+                        DocxPageView(
+                            page = loaded,
+                            paragraphs = paragraphs,
+                            tables = tables,
+                            editable = true,
+                            fieldFor = { valueOf(it.index) },
+                            onField = { index, value -> fieldChanged(index, value) },
+                            onFocus = { index ->
+                                if (focused != index) pending = null
+                                focused = index
+                            },
+                            onCell = { tableIndex, row, column, value ->
+                                tables = tables.map { table ->
+                                    if (table.index != tableIndex) table
+                                    else table.copy(rows = table.rows.mapIndexed { r, cells ->
+                                        if (r != row) cells
+                                        else cells.mapIndexed { c, cell -> if (c == column) value else cell }
+                                    })
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -125,42 +196,83 @@ fun DocxWorkspace(context: Context, descriptor: DocumentDescriptor, modifier: Mo
     }
 }
 
-private fun readDocx(context: Context, uri: android.net.Uri): Pair<List<DocxParagraphBlock>, List<DocxTableBlock>> =
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        XWPFDocument(input).use { doc ->
-            doc.paragraphs.mapIndexed { i, p -> DocxParagraphBlock(i, p.text, p.style.orEmpty()) } to
-                doc.tables.mapIndexed { i, t -> DocxTableBlock(i, t.rows.map { row -> row.tableCells.map { it.text } }) }
-        }
-    } ?: (emptyList<DocxParagraphBlock>() to emptyList())
-
-private fun saveDocx(
-    context: Context,
-    uri: android.net.Uri,
-    paragraphs: List<DocxParagraphBlock>,
-    tables: List<DocxTableBlock>,
-    output: OutputStream
+/** Bold, italic, underline, strike, clear and alignment for the paragraph being edited. */
+@Composable
+private fun FormatBar(
+    enabled: Boolean,
+    value: TextFieldValue?,
+    pending: Int?,
+    onStyle: (Int) -> Unit,
+    onClear: () -> Unit,
+    onAlign: (String) -> Unit
 ) {
-    val doc = context.contentResolver.openInputStream(uri)?.use { XWPFDocument(it) } ?: XWPFDocument()
-    paragraphs.forEach { block ->
-        doc.paragraphs.getOrNull(block.index)?.let { p ->
-            if (p.runs.isEmpty()) p.createRun().setText(block.text)
-            else { p.runs.first().setText(block.text); p.runs.drop(1).forEach { it.setText("") } }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StyleButton("B", enabled, value != null && NoteRichText.isActive(value, NoteRichText.BOLD, pending)) {
+            onStyle(NoteRichText.BOLD)
         }
+        StyleButton("I", enabled, value != null && NoteRichText.isActive(value, NoteRichText.ITALIC, pending)) {
+            onStyle(NoteRichText.ITALIC)
+        }
+        StyleButton("U", enabled, value != null && NoteRichText.isActive(value, NoteRichText.UNDERLINE, pending)) {
+            onStyle(NoteRichText.UNDERLINE)
+        }
+        StyleButton("S", enabled, value != null && NoteRichText.isActive(value, NoteRichText.STRIKE, pending)) {
+            onStyle(NoteRichText.STRIKE)
+        }
+        IconChip(Icons.AutoMirrored.Outlined.FormatAlignLeft, "Align left", enabled) { onAlign("left") }
+        IconChip(Icons.Outlined.FormatAlignCenter, "Align centre", enabled) { onAlign("center") }
+        IconChip(Icons.AutoMirrored.Outlined.FormatAlignRight, "Align right", enabled) { onAlign("right") }
+        IconChip(Icons.Outlined.FormatClear, "Clear formatting", enabled) { onClear() }
     }
-    tables.forEach { tb ->
-        doc.tables.getOrNull(tb.index)?.let { table ->
-            tb.rows.forEachIndexed { r, cells ->
-                table.rows.getOrNull(r)?.let { row ->
-                    cells.forEachIndexed { c, value ->
-                        row.getCell(c)?.let { cell ->
-                            val p = cell.paragraphs.firstOrNull() ?: cell.addParagraph()
-                            if (p.runs.isEmpty()) p.createRun().setText(value)
-                            else { p.runs.first().setText(value); p.runs.drop(1).forEach { it.setText("") } }
-                        }
-                    }
-                }
+}
+
+@Composable
+private fun StyleButton(label: String, enabled: Boolean, active: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (active) ScrittoAmber.copy(alpha = 0.25f) else ScrittoSurface.copy(alpha = 0.6f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            color = if (enabled) ScrittoCreamBright else ScrittoTextSecondary,
+            fontSize = 16.sp,
+            fontWeight = if (label == "B") FontWeight.Bold else FontWeight.Normal,
+            fontStyle = if (label == "I") FontStyle.Italic else FontStyle.Normal,
+            textDecoration = when (label) {
+                "U" -> TextDecoration.Underline
+                "S" -> TextDecoration.LineThrough
+                else -> null
             }
-        }
+        )
     }
-    doc.use { it.write(output) }
+}
+
+@Composable
+private fun IconChip(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(ScrittoSurface.copy(alpha = 0.6f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (enabled) ScrittoCreamBright else ScrittoTextSecondary,
+            modifier = Modifier.size(20.dp)
+        )
+    }
 }

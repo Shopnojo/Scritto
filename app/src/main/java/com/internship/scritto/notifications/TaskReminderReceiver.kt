@@ -35,6 +35,13 @@ class TaskReminderReceiver : BroadcastReceiver() {
             .setContentText(title)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(
+                NotificationRouter.contentIntent(
+                    context,
+                    NotificationTarget.TASKS,
+                    taskId.hashCode()
+                )
+            )
             .build()
 
         val manager =

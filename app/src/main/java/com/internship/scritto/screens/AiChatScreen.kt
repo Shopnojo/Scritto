@@ -333,6 +333,22 @@ fun AiChatScreen(
         }
     }
 
+    // A file shared from its preview arrives here as an attachment.
+    val sharedFile = AssistantSession.pendingFile
+    LaunchedEffect(sharedFile) {
+        sharedFile?.let { file ->
+            AssistantSession.pendingFile = null
+            if (attachments.none { it.uri == file.uri }) {
+                if (attachments.size < MAX_ATTACHMENTS) {
+                    attachments += file
+                    focusPromptSignal++
+                } else {
+                    Toast.makeText(context, "You can attach up to $MAX_ATTACHMENTS files at a time", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     // A prompt typed on Home ("Ask or command...") arrives here.
     LaunchedEffect(Unit) {
         AssistantSession.pendingPrompt?.let { prompt ->

@@ -58,7 +58,10 @@ internal class Param(
     val type: String,
     val description: String,
     val required: Boolean = false,
-    val enum: List<String>? = null
+    val enum: List<String>? = null,
+    /** Fields of each object when [type] is ARRAY. */
+    val items: List<Param>? = null,
+    val requiredItems: List<String> = emptyList()
 )
 
 internal fun stringParam(name: String, description: String, required: Boolean = false, enum: List<String>? = null) =
@@ -70,22 +73,41 @@ internal fun intParam(name: String, description: String, required: Boolean = fal
 internal fun boolParam(name: String, description: String) =
     Param(name, "BOOLEAN", description)
 
+/** A list of objects, each with the given [fields]. */
+internal fun objectArrayParam(
+    name: String,
+    description: String,
+    required: Boolean = false,
+    fields: List<Param>,
+    requiredFields: List<String>
+) = Param(name, "ARRAY", description, required, items = fields, requiredItems = requiredFields)
+
+/** JSON schema for one parameter, including the item schema for arrays. */
+private fun schemaOf(param: Param): JSONObject =
+    JSONObject().apply {
+        put("type", param.type)
+        put("description", param.description)
+        if (param.enum != null) put("enum", JSONArray(param.enum))
+        if (param.items != null) {
+            put(
+                "items",
+                JSONObject()
+                    .put("type", "OBJECT")
+                    .put("properties", JSONObject().also { props ->
+                        param.items.forEach { props.put(it.name, schemaOf(it)) }
+                    })
+                    .put("required", JSONArray(param.requiredItems))
+            )
+        }
+    }
+
 internal fun declare(name: String, description: String, vararg params: Param): JSONObject {
     val function = JSONObject().put("name", name).put("description", description)
 
     if (params.isNotEmpty()) {
         val properties = JSONObject()
 
-        params.forEach { param ->
-            properties.put(
-                param.name,
-                JSONObject().apply {
-                    put("type", param.type)
-                    put("description", param.description)
-                    if (param.enum != null) put("enum", JSONArray(param.enum))
-                }
-            )
-        }
+        params.forEach { param -> properties.put(param.name, schemaOf(param)) }
 
         function.put(
             "parameters",

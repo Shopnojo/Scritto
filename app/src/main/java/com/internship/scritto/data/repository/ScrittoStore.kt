@@ -3,6 +3,7 @@ package com.internship.scritto.data.repository
 import android.content.Context
 import androidx.compose.runtime.mutableStateListOf
 import com.internship.scritto.data.model.Note
+import com.internship.scritto.data.model.NoteFile
 import com.internship.scritto.data.model.NoteSpan
 import com.internship.scritto.data.model.ScheduleEvent
 import com.internship.scritto.data.model.Task
@@ -120,6 +121,17 @@ object ScrittoStore {
             updatedAt = System.currentTimeMillis()
         )
 
+        persist()
+    }
+
+    /** Replaces the imported files a note refers to. */
+    fun setNoteFiles(id: String, files: List<NoteFile>) {
+        checkInitialized()
+
+        val index = _notes.indexOfFirst { it.id == id }
+        if (index == -1) return
+
+        _notes[index] = _notes[index].copy(files = files.distinctBy { it.uri })
         persist()
     }
 
@@ -636,6 +648,15 @@ object ScrittoStore {
                                 put("isPinned", note.isPinned)
 
                                 put(
+                                    "files",
+                                    JSONArray().apply {
+                                        note.files.forEach { file ->
+                                            put(JSONObject().put("name", file.name).put("uri", file.uri))
+                                        }
+                                    }
+                                )
+
+                                put(
                                     "spans",
                                     JSONArray().apply {
                                         note.spans.forEach { span ->
@@ -697,7 +718,13 @@ object ScrittoStore {
                             updatedAt = item.optLong("updatedAt"),
                             spans = spans,
                             textAlign = item.optString("textAlign", "left"),
-                            isPinned = item.optBoolean("isPinned", false)
+                            isPinned = item.optBoolean("isPinned", false),
+                            files = item.optJSONArray("files")?.let { array ->
+                                (0 until array.length()).map { index ->
+                                    val file = array.getJSONObject(index)
+                                    NoteFile(file.optString("name"), file.optString("uri"))
+                                }
+                            }.orEmpty()
                         )
                     )
                 }

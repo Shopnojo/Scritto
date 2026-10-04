@@ -2,8 +2,6 @@ package com.internship.scritto.screens
 
 import android.graphics.Bitmap
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,8 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Flip
-import androidx.compose.material.icons.outlined.Rotate90DegreesCw
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,20 +16,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalContext
-import java.io.OutputStream
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.internship.scritto.documents.DocumentDescriptor
 import com.internship.scritto.documents.DocumentEngine
 import com.internship.scritto.documents.DocumentKind
+import com.internship.scritto.documents.DocumentSaver
 import com.internship.scritto.documents.PdfAnnotationWorkspace
 import com.internship.scritto.documents.DocxWorkspace
 import com.internship.scritto.documents.SpreadsheetWorkspace
 import com.internship.scritto.documents.ImageWorkspace
+import com.internship.scritto.documents.rememberDocumentSaver
 import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 @Composable
 fun DocumentEditorScreen(
@@ -56,27 +54,11 @@ fun DocumentEditorScreen(
     var customRatio by remember(descriptor.uri) { mutableStateOf("") }
     var conversionOpen by remember { mutableStateOf(convertMode) }
     var status by remember { mutableStateOf<String?>(null) }
-    var pendingOperation by remember { mutableStateOf<((OutputStream) -> Unit)?>(null) }
 
-    val saveLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("*/*")
-    ) { target ->
-        target?.let { destination ->
-            val operation = pendingOperation
-            pendingOperation = null
-            if (operation != null) {
-                runCatching {
-                    context.contentResolver.openOutputStream(destination)?.use { output -> operation(output) }
-                    status = "Saved"
-                }.onFailure {
-                    status = "Could not save: " + (it.message ?: "unknown error")
-                }
-            }
-        }
-    }
+    val saver = rememberDocumentSaver(descriptor.uri.toUri()) { status = it }
 
-    LaunchedEffect(descriptor.uri, descriptor.kind) {
-        if (descriptor.kind != DocumentKind.IMAGE) {
+    LaunchedEffect(descriptor.uri, descriptor.kind, convertMode) {
+        if (descriptor.kind != DocumentKind.IMAGE && !convertMode) {
             text = withContext(Dispatchers.IO) {
                 DocumentEngine.readEditableText(context, descriptor)
             }
@@ -85,35 +67,45 @@ fun DocumentEditorScreen(
     }
 
     fun saveEdited() {
-        val extension = name.substringAfterLast('.', "txt")
-        pendingOperation = { output ->
-            DocumentEngine.saveEditedText(context, descriptor, text, output)
+        status = null
+        val snapshot = text
+        saver.save(name.substringBeforeLast('.', name) + "_edited." + name.substringAfterLast('.', "txt")) {
+            DocumentEngine.renderEditedText(context, descriptor, snapshot)
         }
-        saveLauncher.launch(name.substringBeforeLast('.', name) + "_edited." + extension)
     }
 
     fun convertTo(extension: String) {
-        pendingOperation = { output ->
-            DocumentEngine.convert(context, descriptor, extension, output)
+        status = null
+        // A conversion always produces a new file, so it never overwrites the original.
+        saver.save(
+            name.substringBeforeLast('.', name) + "." + extension,
+            allowInPlace = false
+        ) {
+            DocumentEngine.renderConversion(context, descriptor, extension)
         }
-        saveLauncher.launch(name.substringBeforeLast('.', name) + "." + extension)
     }
 
     fun saveImage() {
+        status = null
         val ratio = cropRatioValue(cropRatio, customRatio)
-        pendingOperation = { output ->
-            DocumentEngine.transformImage(
+        val rotation = imageRotation
+        val horizontal = flipH
+        val vertical = flipV
+        // Edited images are written as PNG, so they go to a new file instead of the original.
+        saver.save(name.substringBeforeLast('.', name) + "_edited.png", allowInPlace = false) {
+            ByteArrayOutputStream().also { output ->
+                DocumentEngine.transformImage(
                     context = context,
                     descriptor = descriptor,
                     output = output,
                     crop = ratio?.let { centerCrop(context, descriptor.uri.toUri(), it.first, it.second) },
-                    rotation = imageRotation,
-                    flipHorizontal = flipH,
-                    flipVertical = flipV,
+                    rotation = rotation,
+                    flipHorizontal = horizontal,
+                    flipVertical = vertical,
                     format = Bitmap.CompressFormat.PNG
-            )
+                )
+            }.toByteArray()
         }
-        saveLauncher.launch(name.substringBeforeLast('.', name) + "_edited.png")
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -137,7 +129,7 @@ fun DocumentEditorScreen(
                     Text(name, color = ScrittoTextSecondary, fontSize = 12.sp, maxLines = 1)
                 }
                 if (!convertMode && descriptor.kind != DocumentKind.PDF && descriptor.kind != DocumentKind.IMAGE && descriptor.kind != DocumentKind.DOCX && descriptor.kind != DocumentKind.CSV && descriptor.kind != DocumentKind.XLSX) {
-                    IconButton(onClick = { saveEdited() }) {
+                    IconButton(onClick = { saveEdited() }, enabled = loaded) {
                         Icon(Icons.Outlined.Save, "Save", tint = ScrittoAmber)
                     }
                 }
@@ -174,6 +166,10 @@ fun DocumentEditorScreen(
                     descriptor = descriptor,
                     modifier = Modifier.weight(1f)
                 )
+                convertMode -> ConvertHint(
+                    modifier = Modifier.weight(1f),
+                    onChooseFormat = { conversionOpen = true }
+                )
                 else -> TextEditBody(
                     modifier = Modifier.weight(1f),
                     text = text,
@@ -182,8 +178,7 @@ fun DocumentEditorScreen(
                 )
             }
 
-            Spacer(Modifier.weight(1f))
-
+            // No spacer here: the workspace above takes the full remaining height.
             if (status != null) {
                 Text(
                     status.orEmpty(),
@@ -208,6 +203,20 @@ fun DocumentEditorScreen(
                 convertTo(it)
             }
         )
+    }
+}
+
+@Composable
+private fun ConvertHint(modifier: Modifier, onChooseFormat: () -> Unit) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        OutlinedButton(onClick = onChooseFormat) {
+            Text("Choose a format", color = ScrittoCreamBright)
+        }
     }
 }
 
