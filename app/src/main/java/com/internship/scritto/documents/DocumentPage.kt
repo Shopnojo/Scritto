@@ -468,7 +468,7 @@ private fun GridColumnHeader(
                         onDragEnd = {
                             if (targetIndex != startIndex) {
                                 onMove(targetIndex)
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                             }
                             dragDistance = 0f
                             targetIndex = startIndex
