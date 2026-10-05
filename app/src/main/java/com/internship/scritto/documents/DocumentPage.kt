@@ -462,7 +462,7 @@ private fun GridColumnHeader(
                                 .coerceIn(0, maxIndex)
                             if (nextTarget != targetIndex) {
                                 targetIndex = nextTarget
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                             }
                         },
                         onDragEnd = {
