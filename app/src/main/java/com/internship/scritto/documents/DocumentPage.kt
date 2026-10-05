@@ -38,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
@@ -293,6 +295,8 @@ fun SheetGridView(
                     repeat(columns) { column ->
                         GridColumnHeader(
                             label = columnLabel(column),
+                            editable = editable,
+                            maxIndex = columns - 1,
                             onDelete = { onDeleteColumn(column) },
                             onMove = { target -> onMoveColumn(column, target) }
                         )
@@ -312,6 +316,8 @@ fun SheetGridView(
                     Row {
                         GridRowHeader(
                             label = (rowIndex + 1).toString(),
+                            editable = editable,
+                            maxIndex = sheet.rows.lastIndex,
                             onDelete = { onDeleteRow(rowIndex) },
                             onMove = { target -> onMoveRow(rowIndex, target) }
                         )
@@ -346,31 +352,65 @@ fun SheetGridView(
 @Composable
 private fun GridRowHeader(
     label: String,
+    editable: Boolean,
+    maxIndex: Int,
     onDelete: () -> Unit,
     onMove: (Int) -> Unit
 ) {
+    if (!editable) {
+        GridCell(width = 44.dp, header = false) {
+            Text(label, color = InkMuted, fontSize = 11.sp, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    val haptics = LocalHapticFeedback.current
+    val startIndex = label.toInt() - 1
     var dragDistance by remember { mutableStateOf(0f) }
+    var targetIndex by remember { mutableStateOf(startIndex) }
+
     Row(
         Modifier.width(92.dp).height(36.dp).border(BorderStroke(0.5.dp, RuleColor)).background(HeaderTint),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Icon(Icons.Outlined.DragHandle, "Drag row $label", tint = InkMuted,
-            modifier = Modifier.size(20.dp).pointerInput(label) {
-                detectDragGestures(
-                    onDragStart = { dragDistance = 0f },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragDistance += amount.y
-                        if (kotlin.math.abs(dragDistance) >= 18f) {
-                            onMove(label.toInt() - 1 + if (dragDistance > 0f) 1 else -1)
+        Icon(
+            Icons.Outlined.DragHandle,
+            "Drag row $label",
+            tint = InkMuted,
+            modifier = Modifier
+                .size(20.dp)
+                .pointerInput(startIndex, maxIndex) {
+                    detectDragGestures(
+                        onDragStart = {
                             dragDistance = 0f
+                            targetIndex = startIndex
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            dragDistance += amount.y
+                            val nextTarget = (startIndex + (dragDistance / 36f).toInt())
+                                .coerceIn(0, maxIndex)
+                            if (nextTarget != targetIndex) {
+                                targetIndex = nextTarget
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                        },
+                        onDragEnd = {
+                            if (targetIndex != startIndex) {
+                                onMove(targetIndex)
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                        },
+                        onDragCancel = {
+                            dragDistance = 0f
+                            targetIndex = startIndex
                         }
-                    },
-                    onDragEnd = { dragDistance = 0f },
-                    onDragCancel = { dragDistance = 0f }
-                )
-            }
+                    )
+                }
         )
         Text(label, color = InkMuted, fontSize = 11.sp, modifier = Modifier.width(24.dp))
         IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
@@ -382,31 +422,65 @@ private fun GridRowHeader(
 @Composable
 private fun GridColumnHeader(
     label: String,
+    editable: Boolean,
+    maxIndex: Int,
     onDelete: () -> Unit,
     onMove: (Int) -> Unit
 ) {
+    if (!editable) {
+        GridCell(width = 110.dp, header = true) {
+            Text(label, color = InkMuted, fontSize = 11.sp, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    val haptics = LocalHapticFeedback.current
+    val startIndex = columnIndex(label)
     var dragDistance by remember { mutableStateOf(0f) }
+    var targetIndex by remember { mutableStateOf(startIndex) }
+
     Row(
         Modifier.width(110.dp).height(30.dp).border(BorderStroke(0.5.dp, RuleColor)).background(HeaderTint),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Icon(Icons.Outlined.DragHandle, "Drag column $label", tint = InkMuted,
-            modifier = Modifier.size(18.dp).pointerInput(label) {
-                detectDragGestures(
-                    onDragStart = { dragDistance = 0f },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragDistance += amount.x
-                        if (kotlin.math.abs(dragDistance) >= 22f) {
-                            onMove(columnIndex(label) + if (dragDistance > 0f) 1 else -1)
+        Icon(
+            Icons.Outlined.DragHandle,
+            "Drag column $label",
+            tint = InkMuted,
+            modifier = Modifier
+                .size(18.dp)
+                .pointerInput(startIndex, maxIndex) {
+                    detectDragGestures(
+                        onDragStart = {
                             dragDistance = 0f
+                            targetIndex = startIndex
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            dragDistance += amount.x
+                            val nextTarget = (startIndex + (dragDistance / 110f).toInt())
+                                .coerceIn(0, maxIndex)
+                            if (nextTarget != targetIndex) {
+                                targetIndex = nextTarget
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                        },
+                        onDragEnd = {
+                            if (targetIndex != startIndex) {
+                                onMove(targetIndex)
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                        },
+                        onDragCancel = {
+                            dragDistance = 0f
+                            targetIndex = startIndex
                         }
-                    },
-                    onDragEnd = { dragDistance = 0f },
-                    onDragCancel = { dragDistance = 0f }
-                )
-            }
+                    )
+                }
         )
         Text(label, color = InkMuted, fontSize = 11.sp)
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
