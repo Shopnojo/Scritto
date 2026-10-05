@@ -312,8 +312,6 @@ fun SheetGridView(
                             onDelete = { onDeleteRow(rowIndex) },
                             onMove = { target -> onMoveRow(rowIndex, target) }
                         )
-                            Text("${rowIndex + 1}", color = InkMuted, fontSize = 11.sp)
-                        }
                         repeat(columns) { column ->
                             val value = row.getOrNull(column).orEmpty()
                             GridCell(width = 110.dp, header = false) {
