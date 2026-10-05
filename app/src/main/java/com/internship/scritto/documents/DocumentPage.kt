@@ -392,13 +392,13 @@ private fun GridRowHeader(
                                 .coerceIn(0, maxIndex)
                             if (nextTarget != targetIndex) {
                                 targetIndex = nextTarget
-                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                             }
                         },
                         onDragEnd = {
                             if (targetIndex != startIndex) {
                                 onMove(targetIndex)
-                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                             }
                             dragDistance = 0f
                             targetIndex = startIndex
@@ -462,13 +462,13 @@ private fun GridColumnHeader(
                                 .coerceIn(0, maxIndex)
                             if (nextTarget != targetIndex) {
                                 targetIndex = nextTarget
-                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                             }
                         },
                         onDragEnd = {
                             if (targetIndex != startIndex) {
                                 onMove(targetIndex)
-                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                             }
                             dragDistance = 0f
                             targetIndex = startIndex
