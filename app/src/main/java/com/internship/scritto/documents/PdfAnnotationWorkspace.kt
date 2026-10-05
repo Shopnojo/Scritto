@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -229,14 +230,17 @@ private fun PdfAnnotationPage(
 ) {
     var draftStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var selectedTextIndex by remember { mutableStateOf<Int?>(null) }
+    var pageSize by remember { mutableStateOf(IntSize.Zero) }
 
     Box(
+
         Modifier
             .fillMaxWidth()
             .aspectRatio(
                 page.bitmap.width.toFloat() /
                     page.bitmap.height.toFloat()
             )
+            .onSizeChanged { pageSize = it }
     ) {
             Image(
                 bitmap = page.bitmap.asImageBitmap(),
@@ -320,19 +324,27 @@ private fun PdfAnnotationPage(
                                 })
                             }
                         }
-                        .pointerInput(tool, index, annotation.x, annotation.y) {
+                        .pointerInput(tool, index, annotation.x, annotation.y, pageSize) {
                             if (tool == PdfAnnotationTool.SELECT) {
+                                var dragX = annotation.x
+                                var dragY = annotation.y
                                 detectDragGestures(
                                     onDragStart = {
                                         selectedTextIndex = index
+                                        dragX = annotation.x
+                                        dragY = annotation.y
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        val newX = (annotation.x + dragAmount.x)
-                                            .coerceIn(0f, (size.width - annotation.width).coerceAtLeast(0f))
-                                        val newY = (annotation.y + dragAmount.y)
-                                            .coerceIn(0f, (size.height - annotation.height).coerceAtLeast(0f))
-                                        onTextMoved(index, newX, newY)
+                                        dragX = (dragX + dragAmount.x).coerceIn(
+                                            0f,
+                                            (pageSize.width - annotation.width).coerceAtLeast(0f)
+                                        )
+                                        dragY = (dragY + dragAmount.y).coerceIn(
+                                            0f,
+                                            (pageSize.height - annotation.height).coerceAtLeast(0f)
+                                        )
+                                        onTextMoved(index, dragX, dragY)
                                     }
                                 )
                             }
