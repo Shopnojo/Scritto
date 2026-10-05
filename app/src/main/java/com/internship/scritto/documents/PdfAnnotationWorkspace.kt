@@ -313,6 +313,13 @@ private fun PdfAnnotationPage(
                             Color.White.copy(alpha = 0.88f),
                             RoundedCornerShape(7.dp)
                         )
+                        .pointerInput(tool, index) {
+                            if (tool == PdfAnnotationTool.SELECT) {
+                                detectTapGestures(onTap = {
+                                    selectedTextIndex = index
+                                })
+                            }
+                        }
                         .pointerInput(tool, index, annotation.x, annotation.y) {
                             if (tool == PdfAnnotationTool.SELECT) {
                                 detectDragGestures(
