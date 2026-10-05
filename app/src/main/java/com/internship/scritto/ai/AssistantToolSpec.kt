@@ -138,12 +138,14 @@ object AssistantToolSpec {
                     ),
                     declare(
                         "read_file",
-                        "Read the contents of an imported file (text, code, CSV, Word, PowerPoint, Excel, PDF, image, audio).",
+                        "Read the whole contents of an imported file (text, code, CSV, Word, PowerPoint, Excel, PDF, image, audio). " +
+                            "Use this to summarise a file, pull out key points or answer questions about it. PDF text comes back with [Page N] markers. " +
+                            "Not needed for a file attached to the current message: its text is already in the message.",
                         stringParam("file_name", "File name, as returned by list_files.", required = true)
                     ),
                     declare(
                         "get_pdf_text",
-                        "Read the text of a PDF's pages, on the device (cheap). Call this before edit_pdf so you quote the exact text. " +
+                        "Read the text of a PDF's pages, on the device (cheap). Use it only to prepare an edit_pdf, so you quote the exact text; to summarise a PDF use read_file. " +
                             "Read only the pages you need; the result is capped, so ask for a smaller page range if it is truncated.",
                         stringParam("file_name", "PDF file name, as returned by list_files.", required = true),
                         intParam("from_page", "First page, starting at 1. Default 1."),

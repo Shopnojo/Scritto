@@ -85,6 +85,12 @@ import com.internship.scritto.ui.theme.ScrittoTextSecondary
 
 private enum class AssistantPhase { IDLE, LISTENING, THINKING, SPEAKING }
 
+/** Mic level (0..1) below which it's just room noise, not the user talking. */
+private const val VOICE_FLOOR = 0.5f
+
+/** Most dots the orb releases at once. */
+private const val DOT_COUNT = 28
+
 private val suggestions = listOf(
     "What's on my schedule today?",
     "Remind me to call mom tomorrow at 6pm",
@@ -398,7 +404,7 @@ private fun AssistantOrb(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
+            animation = tween(700, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "orbBreath"
@@ -409,7 +415,7 @@ private fun AssistantOrb(
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                if (phase == AssistantPhase.SPEAKING) 1100 else 1900,
+                if (phase == AssistantPhase.SPEAKING) 1500 else 1200,
                 easing = LinearEasing
             )
         ),
@@ -425,10 +431,22 @@ private fun AssistantOrb(
         label = "orbSpin"
     )
 
-    val smoothLevel by animateFloatAsState(
-        targetValue = if (phase == AssistantPhase.LISTENING) level else 0f,
-        animationSpec = tween(120),
-        label = "orbLevel"
+    // The orb only comes alive while someone is talking: the user (mic level above the noise
+    // floor) or Scritto (speaking). Otherwise it sits still, with no glow and no motion.
+    val talking = when (phase) {
+        AssistantPhase.LISTENING -> level > VOICE_FLOOR
+        AssistantPhase.SPEAKING -> true
+        else -> false
+    }
+
+    val activity by animateFloatAsState(
+        targetValue = when {
+            !talking -> 0f
+            phase == AssistantPhase.SPEAKING -> 0.75f
+            else -> ((level - VOICE_FLOOR) * 3f + 0.3f).coerceIn(0.3f, 1f)
+        },
+        animationSpec = tween(if (talking) 140 else 450),
+        label = "orbActivity"
     )
 
     Box(
@@ -446,38 +464,44 @@ private fun AssistantOrb(
             val center = Offset(size.width / 2f, size.height / 2f)
             val base = size.minDimension * 0.24f
 
-            val energy = when (phase) {
-                AssistantPhase.LISTENING -> 0.10f + smoothLevel * 0.28f
-                AssistantPhase.SPEAKING -> 0.08f + breath * 0.12f
-                AssistantPhase.THINKING -> 0.04f
-                AssistantPhase.IDLE -> 0.02f + breath * 0.03f
-            }
-            val coreRadius = base * (1f + energy)
+            val pulse = if (phase == AssistantPhase.SPEAKING) breath * 0.08f else 0f
+            val coreRadius = base * (1f + activity * 0.22f + pulse * activity)
 
-            // soft outer glow
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        ScrittoAmber.copy(alpha = 0.34f),
-                        ScrittoAmber.copy(alpha = 0.08f),
-                        Color.Transparent
-                    ),
-                    center = center,
-                    radius = coreRadius * 2.6f
-                ),
-                radius = coreRadius * 2.6f,
-                center = center
-            )
-
-            // expanding rings while listening / speaking
-            if (phase == AssistantPhase.LISTENING || phase == AssistantPhase.SPEAKING) {
-                repeat(2) { index ->
-                    val progress = (ring + index * 0.5f) % 1f
-                    drawCircle(
-                        color = ScrittoAmberBright.copy(alpha = (1f - progress) * 0.32f),
-                        radius = coreRadius * (1.05f + progress * 0.85f),
+            // soft outer glow: only while talking
+            if (activity > 0.01f) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            ScrittoAmber.copy(alpha = 0.40f * activity),
+                            ScrittoAmber.copy(alpha = 0.10f * activity),
+                            Color.Transparent
+                        ),
                         center = center,
-                        style = Stroke(width = 2.dp.toPx())
+                        radius = coreRadius * 2.6f
+                    ),
+                    radius = coreRadius * 2.6f,
+                    center = center
+                )
+            }
+
+            // dots released from the orb's edge and drifting outwards while talking
+            if (activity > 0.01f) {
+                val visible = (DOT_COUNT * activity).toInt().coerceAtLeast(1)
+                val reach = size.minDimension / 2f
+
+                repeat(visible) { i ->
+                    val progress = (ring + i * 0.6180339f) % 1f
+                    val angle = i * 2.3999632f // golden angle: dots fan out evenly
+                    val travel = 0.55f + (i % 5) * 0.11f
+                    val distance = coreRadius * 1.08f + (reach - coreRadius * 1.08f) * travel * progress
+
+                    drawCircle(
+                        color = ScrittoAmberBright.copy(alpha = (1f - progress) * 0.9f * activity),
+                        radius = (1.5f + (i % 3) * 1.2f).dp.toPx() * (1f - progress * 0.6f),
+                        center = Offset(
+                            center.x + kotlin.math.cos(angle) * distance,
+                            center.y + kotlin.math.sin(angle) * distance
+                        )
                     )
                 }
             }
