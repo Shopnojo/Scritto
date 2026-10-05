@@ -38,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
@@ -399,7 +398,7 @@ private fun GridRowHeader(
                         onDragEnd = {
                             if (targetIndex != startIndex) {
                                 onMove(targetIndex)
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
                             }
                             dragDistance = 0f
                             targetIndex = startIndex
@@ -433,7 +432,7 @@ private fun GridColumnHeader(
         return
     }
 
-    val haptics = LocalHapticFeedback.current
+    val haptics = androidx.compose.ui.platform.LocalView.current
     val startIndex = columnIndex(label)
     var dragDistance by remember { mutableStateOf(0f) }
     var targetIndex by remember { mutableStateOf(startIndex) }
@@ -454,7 +453,7 @@ private fun GridColumnHeader(
                         onDragStart = {
                             dragDistance = 0f
                             targetIndex = startIndex
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptics.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                         },
                         onDrag = { change, amount ->
                             change.consume()
