@@ -193,6 +193,15 @@ fun PdfAnnotationWorkspace(
                                 } else state
                             }
                         },
+                        onTextDeleted = { textIndex ->
+                            pages = pages.mapIndexed { pageIndex, state ->
+                                if (pageIndex == index) {
+                                    state.copy(
+                                        texts = state.texts.filterIndexed { i, _ -> i != textIndex }
+                                    )
+                                } else state
+                            }
+                        },
                         onStrokeFinished = { stroke ->
                             pages = pages.mapIndexed { pageIndex, state ->
                                 if (pageIndex == index && stroke.size > 1) {
@@ -228,6 +237,7 @@ private fun PdfAnnotationPage(
     onTextChanged: (Int, String) -> Unit,
     onTextMoved: (Int, Float, Float) -> Unit,
     onTextResized: (Int, Float, Float) -> Unit,
+    onTextDeleted: (Int) -> Unit,
     onStrokeFinished: (List<Offset>) -> Unit
 ) {
     var draftStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
@@ -366,33 +376,47 @@ private fun PdfAnnotationPage(
                     )
 
                     if (tool == PdfAnnotationTool.SELECT && isSelected) {
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .size(18.dp)
-                                .background(ScrittoAmber, RoundedCornerShape(4.dp))
-                                .pointerInput(
-                                    index,
-                                    annotation.x,
-                                    annotation.y,
-                                    annotation.width,
-                                    annotation.height,
-                                    pageSize
-                                ) {
-                                    detectDragGestures(
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            val maxWidth = max(120f, pageSize.width - annotation.x)
-                                            val maxHeight = max(48f, pageSize.height - annotation.y)
-                                            val newWidth = (annotation.width + dragAmount.x)
-                                                .coerceIn(120f, maxWidth)
-                                            val newHeight = (annotation.height + dragAmount.y)
-                                                .coerceIn(48f, maxHeight)
-                                            onTextResized(index, newWidth, newHeight)
-                                        }
-                                    )
-                                }
-                        )
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .background(ScrittoCreamBright, RoundedCornerShape(4.dp))
+                                    .pointerInput(
+                                        index,
+                                        annotation.x,
+                                        annotation.y,
+                                        annotation.width,
+                                        annotation.height,
+                                        pageSize
+                                    ) {
+                                        detectDragGestures(
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                val maxWidth = max(120f, pageSize.width - annotation.x)
+                                                val maxHeight = max(48f, pageSize.height - annotation.y)
+                                                val newWidth = (annotation.width + dragAmount.x)
+                                                    .coerceIn(120f, maxWidth)
+                                                val newHeight = (annotation.height + dragAmount.y)
+                                                    .coerceIn(48f, maxHeight)
+                                                onTextResized(index, newWidth, newHeight)
+                                            }
+                                        )
+                                    }
+                            )
+                            TextButton(
+                                onClick = { onTextDeleted(index) },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Delete", color = ScrittoAmber, fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
             }
