@@ -46,6 +46,7 @@ import com.internship.scritto.ui.theme.ScrittoTextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 private enum class PdfAnnotationTool {
@@ -370,14 +371,23 @@ private fun PdfAnnotationPage(
                                 .align(Alignment.BottomEnd)
                                 .size(18.dp)
                                 .background(ScrittoAmber, RoundedCornerShape(4.dp))
-                                .pointerInput(index, annotation.width, annotation.height) {
+                                .pointerInput(
+                                    index,
+                                    annotation.x,
+                                    annotation.y,
+                                    annotation.width,
+                                    annotation.height,
+                                    pageSize
+                                ) {
                                     detectDragGestures(
                                         onDrag = { change, dragAmount ->
                                             change.consume()
+                                            val maxWidth = max(120f, pageSize.width - annotation.x)
+                                            val maxHeight = max(48f, pageSize.height - annotation.y)
                                             val newWidth = (annotation.width + dragAmount.x)
-                                                .coerceAtLeast(120f)
+                                                .coerceIn(120f, maxWidth)
                                             val newHeight = (annotation.height + dragAmount.y)
-                                                .coerceAtLeast(48f)
+                                                .coerceIn(48f, maxHeight)
                                             onTextResized(index, newWidth, newHeight)
                                         }
                                     )
