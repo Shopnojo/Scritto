@@ -121,7 +121,7 @@ fun ImageWorkspace(
                                 }
                         )
                     }
-                )
+                }
             }
         }
 
