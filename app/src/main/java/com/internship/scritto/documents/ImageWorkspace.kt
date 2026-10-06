@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -46,6 +47,22 @@ fun ImageWorkspace(
 ) {
     var bitmap by remember(descriptor.uri) { mutableStateOf<Bitmap?>(null) }
     var loading by remember(descriptor.uri) { mutableStateOf(true) }
+    val previewRatio = remember(cropRatio, customRatio) {
+        when (cropRatio) {
+            "1:1" -> 1f
+            "4:3" -> 4f / 3f
+            "16:9" -> 16f / 9f
+            "9:16" -> 9f / 16f
+            "Original" -> null
+            else -> customRatio.split(":").let { parts ->
+                if (parts.size == 2) {
+                    val width = parts[0].toFloatOrNull()
+                    val height = parts[1].toFloatOrNull()
+                    if (width != null && height != null && width > 0f && height > 0f) width / height else null
+                } else null
+            }
+        }
+    }
 
     LaunchedEffect(descriptor.uri) {
         loading = true
@@ -72,18 +89,38 @@ fun ImageWorkspace(
             when {
                 loading -> Text("Loading image…", color = ScrittoTextSecondary)
                 bitmap == null -> Text("Unable to preview image", color = ScrittoTextSecondary)
-                else -> Image(
-                    bitmap = bitmap!!.asImageBitmap(),
-                    contentDescription = descriptor.name,
-                    contentScale = ContentScale.Fit,
+                else -> Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(12.dp)
-                        .graphicsLayer {
-                            rotationZ = rotation
-                            scaleX = if (flipH) -1f else 1f
-                            scaleY = if (flipV) -1f else 1f
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = if (previewRatio != null) {
+                            Modifier
+                                .fillMaxSize()
+                                .aspectRatio(
+                                    previewRatio,
+                                    matchHeightConstraintsFirst = true
+                                )
+                        } else {
+                            Modifier.fillMaxSize()
                         }
+                    ) {
+                        Image(
+                            bitmap = bitmap!!.asImageBitmap(),
+                            contentDescription = descriptor.name,
+                            contentScale = if (previewRatio != null) ContentScale.Crop else ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .graphicsLayer {
+                                    rotationZ = rotation
+                                    scaleX = if (flipH) -1f else 1f
+                                    scaleY = if (flipV) -1f else 1f
+                                }
+                        )
+                    }
                 )
             }
         }
