@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,14 +22,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import com.internship.scritto.notes.NoteRichText
@@ -230,7 +241,11 @@ fun SheetGridView(
     selected: Int,
     onSelect: (Int) -> Unit,
     editable: Boolean,
-    onCell: (row: Int, column: Int, value: String) -> Unit = { _, _, _ -> }
+    onCell: (row: Int, column: Int, value: String) -> Unit = { _, _, _ -> },
+    onDeleteRow: (row: Int) -> Unit = {},
+    onDeleteColumn: (column: Int) -> Unit = {},
+    onMoveRow: (from: Int, to: Int) -> Unit = { _, _ -> },
+    onMoveColumn: (from: Int, to: Int) -> Unit = { _, _ -> }
 ) {
     val sheet = sheets.getOrNull(selected) ?: return
     val columns = sheet.rows.maxOfOrNull { it.size }?.coerceAtLeast(1) ?: 1
@@ -276,9 +291,13 @@ fun SheetGridView(
                 Row(Modifier.background(HeaderTint)) {
                     CornerCell()
                     repeat(columns) { column ->
-                        GridCell(width = 110.dp, header = true) {
-                            Text(columnLabel(column), color = InkMuted, fontSize = 11.sp)
-                        }
+                        GridColumnHeader(
+                            label = columnLabel(column),
+                            editable = editable,
+                            maxIndex = columns - 1,
+                            onDelete = { onDeleteColumn(column) },
+                            onMove = { target -> onMoveColumn(column, target) }
+                        )
                     }
                 }
 
@@ -293,9 +312,13 @@ fun SheetGridView(
 
                 sheet.rows.forEachIndexed { rowIndex, row ->
                     Row {
-                        GridCell(width = 44.dp, header = true) {
-                            Text("${rowIndex + 1}", color = InkMuted, fontSize = 11.sp)
-                        }
+                        GridRowHeader(
+                            label = (rowIndex + 1).toString(),
+                            editable = editable,
+                            maxIndex = sheet.rows.lastIndex,
+                            onDelete = { onDeleteRow(rowIndex) },
+                            onMove = { target -> onMoveRow(rowIndex, target) }
+                        )
                         repeat(columns) { column ->
                             val value = row.getOrNull(column).orEmpty()
                             GridCell(width = 110.dp, header = false) {
@@ -322,6 +345,152 @@ fun SheetGridView(
             }
         }
     }
+}
+
+@Composable
+private fun GridRowHeader(
+    label: String,
+    editable: Boolean,
+    maxIndex: Int,
+    onDelete: () -> Unit,
+    onMove: (Int) -> Unit
+) {
+    if (!editable) {
+        GridCell(width = 44.dp, header = false) {
+            Text(label, color = InkMuted, fontSize = 11.sp, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    val haptics = androidx.compose.ui.platform.LocalView.current
+    val startIndex = label.toInt() - 1
+    var dragDistance by remember { mutableStateOf(0f) }
+    var targetIndex by remember { mutableStateOf(startIndex) }
+
+    Row(
+        Modifier.width(92.dp).height(36.dp).border(BorderStroke(0.5.dp, RuleColor)).background(HeaderTint),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Outlined.DragHandle,
+            "Drag row $label",
+            tint = InkMuted,
+            modifier = Modifier
+                .size(20.dp)
+                .pointerInput(startIndex, maxIndex) {
+                    detectDragGestures(
+                        onDragStart = {
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                            haptics.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            dragDistance += amount.y
+                            val nextTarget = (startIndex + (dragDistance / 36f).toInt())
+                                .coerceIn(0, maxIndex)
+                            if (nextTarget != targetIndex) {
+                                targetIndex = nextTarget
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            }
+                        },
+                        onDragEnd = {
+                            if (targetIndex != startIndex) {
+                                onMove(targetIndex)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            }
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                        },
+                        onDragCancel = {
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                        }
+                    )
+                }
+        )
+        Text(label, color = InkMuted, fontSize = 11.sp, modifier = Modifier.width(24.dp))
+        IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+            Icon(Icons.Outlined.Delete, "Delete row $label", tint = InkMuted)
+        }
+    }
+}
+
+@Composable
+private fun GridColumnHeader(
+    label: String,
+    editable: Boolean,
+    maxIndex: Int,
+    onDelete: () -> Unit,
+    onMove: (Int) -> Unit
+) {
+    if (!editable) {
+        GridCell(width = 110.dp, header = true) {
+            Text(label, color = InkMuted, fontSize = 11.sp, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    val haptics = androidx.compose.ui.platform.LocalView.current
+    val startIndex = columnIndex(label)
+    var dragDistance by remember { mutableStateOf(0f) }
+    var targetIndex by remember { mutableStateOf(startIndex) }
+
+    Row(
+        Modifier.width(110.dp).height(30.dp).border(BorderStroke(0.5.dp, RuleColor)).background(HeaderTint),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Outlined.DragHandle,
+            "Drag column $label",
+            tint = InkMuted,
+            modifier = Modifier
+                .size(18.dp)
+                .pointerInput(startIndex, maxIndex) {
+                    detectDragGestures(
+                        onDragStart = {
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                            haptics.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            dragDistance += amount.x
+                            val nextTarget = (startIndex + (dragDistance / 110f).toInt())
+                                .coerceIn(0, maxIndex)
+                            if (nextTarget != targetIndex) {
+                                targetIndex = nextTarget
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            }
+                        },
+                        onDragEnd = {
+                            if (targetIndex != startIndex) {
+                                onMove(targetIndex)
+                                haptics.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            }
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                        },
+                        onDragCancel = {
+                            dragDistance = 0f
+                            targetIndex = startIndex
+                        }
+                    )
+                }
+        )
+        Text(label, color = InkMuted, fontSize = 11.sp)
+        IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+            Icon(Icons.Outlined.Delete, "Delete column $label", tint = InkMuted)
+        }
+    }
+}
+
+private fun columnIndex(label: String): Int {
+    var result = 0
+    label.forEach { result = result * 26 + (it.code - 'A'.code + 1) }
+    return result - 1
 }
 
 @Composable

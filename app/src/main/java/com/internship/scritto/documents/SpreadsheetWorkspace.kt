@@ -135,6 +135,28 @@ fun SpreadsheetWorkspace(
                             }
                         }
                     }
+                },
+                onDeleteRow = { row ->
+                    updateSelected { rows -> rows.filterIndexed { index, _ -> index != row } }
+                },
+                onDeleteColumn = { column ->
+                    updateSelected { rows -> rows.map { cells -> cells.filterIndexed { index, _ -> index != column } } }
+                },
+                onMoveRow = { from, to ->
+                    updateSelected { rows ->
+                        if (from == to || from !in rows.indices || to !in rows.indices) rows
+                        else rows.toMutableList().apply { add(to, removeAt(from)) }
+                    }
+                },
+                onMoveColumn = { from, to ->
+                    updateSelected { rows ->
+                        if (from == to || from !in 0 until columnCount || to !in 0 until columnCount) rows
+                        else rows.map { cells ->
+                            cells.toMutableList().apply {
+                                if (from in indices && to in indices) add(to, removeAt(from))
+                            }
+                        }
+                    }
                 }
             )
             }
