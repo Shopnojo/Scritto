@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
+import com.internship.scritto.telemetry.Telemetry
 
 private enum class PdfAnnotationTool {
     SELECT,
@@ -79,6 +80,8 @@ fun PdfAnnotationWorkspace(
     var pages by remember(descriptor.uri) { mutableStateOf<List<PdfPageState>>(emptyList()) }
     var saveStatus by remember(descriptor.uri) { mutableStateOf<String?>(null) }
     val saver = rememberDocumentSaver(descriptor.uri.toUri()) { saveStatus = it }
+
+    LaunchedEffect(descriptor.uri) { Telemetry.track("pdf_editor_opened") }
 
     LaunchedEffect(descriptor.uri) {
         pages = withContext(Dispatchers.IO) {

@@ -4,8 +4,10 @@ import android.content.Context
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import com.internship.scritto.data.repository.ScrittoStore
+import com.internship.scritto.documents.PdfEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
 import java.io.InputStream
@@ -25,7 +27,8 @@ class FileContentReader(
     private val client: GeminiClient
 ) {
 
-    private val resolver = context.applicationContext.contentResolver
+    private val appContext = context.applicationContext
+    private val resolver = appContext.contentResolver
 
     /** Cache of Gemini transcriptions so a file is only sent once. */
     private val transcriptions = HashMap<String, String>()
@@ -63,10 +66,15 @@ class FileContentReader(
                     }
 
                     FileKind.PDF -> {
-                        if (bytes.size > MAX_INLINE_BYTES) {
-                            fail("This PDF is larger than 12 MB, which is too big for Scritto AI to read.", "application/pdf")
-                        } else {
-                            transcribe(file, bytes, "application/pdf", declaredMime)
+                        // Text PDFs are read on the device: instant, free, and never cut off by a
+                        // failed model call. Only scans (no text layer) go to Gemini.
+                        val local = localPdfText(bytes)
+
+                        when {
+                            local != null -> clipped(local, "application/pdf")
+                            bytes.size > MAX_INLINE_BYTES ->
+                                fail("This PDF looks scanned and is larger than 12 MB, which is too big for Scritto AI to read.", "application/pdf")
+                            else -> transcribe(file, bytes, "application/pdf", declaredMime)
                         }
                     }
 
@@ -102,6 +110,24 @@ class FileContentReader(
         }
 
     // ------------------------------------------------------------------
+
+    /** Page-labelled text of a PDF, or null when it has no usable text layer (a scan) or can't be parsed. */
+    private fun localPdfText(bytes: ByteArray): String? {
+        val read = runCatching {
+            PdfEditor(appContext).readPages(ByteArrayInputStream(bytes), 1, Int.MAX_VALUE, MAX_CHARS)
+        }.getOrNull() ?: return null
+
+        val letters = read.pages.sumOf { page -> page.text.count { it.isLetterOrDigit() } }
+        if (read.pages.isEmpty() || letters < MIN_LETTERS_PER_PAGE * read.pages.size) return null
+
+        val body = read.pages.joinToString("\n\n") { "[Page ${it.page}]\n${it.text}" }
+
+        return if (read.truncated) {
+            body + "\n\n[Only the first ${read.pages.size} of ${read.pageCount} pages are included.]"
+        } else {
+            body
+        }
+    }
 
     private suspend fun readImage(file: ScrittoStore.ImportedFile, bytes: ByteArray, declaredMime: String): Result {
         // Normal path: shrink, straighten and re-encode so any photo is small and readable.
@@ -215,6 +241,9 @@ class FileContentReader(
     private companion object {
         const val MAX_CHARS = 60_000
         const val MAX_TEXT_BYTES = 2 * 1024 * 1024
+
+        /** Below this many letters/digits per page a PDF is treated as a scan. */
+        const val MIN_LETTERS_PER_PAGE = 20
 
         /** Raw PDFs/audio are sent as-is (base64 grows them by a third; requests cap at 20 MB). */
         const val MAX_INLINE_BYTES = 12 * 1024 * 1024

@@ -45,6 +45,7 @@ import kotlinx.coroutines.sync.withLock
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
+import com.internship.scritto.telemetry.Telemetry
 
 @Composable
 fun DocumentPreviewScreen(
@@ -58,6 +59,8 @@ fun DocumentPreviewScreen(
     val context = LocalContext.current
     val descriptor = remember(name, uri) { DocumentTypes.describe(name, uri) }
     var actionsOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(descriptor.uri) { Telemetry.track("document_opened") }
 
     Box(Modifier.fillMaxSize()) {
         ScrittoMesh(Modifier.fillMaxSize())

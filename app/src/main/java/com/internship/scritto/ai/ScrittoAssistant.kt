@@ -2,6 +2,7 @@ package com.internship.scritto.ai
 
 import org.json.JSONArray
 import org.json.JSONObject
+import com.internship.scritto.telemetry.Telemetry
 
 data class ChatTurn(val text: String, val fromUser: Boolean)
 
@@ -34,6 +35,8 @@ class ScrittoAssistant(
         attachments: List<Attachment> = emptyList(),
         voice: Boolean = false
     ): AssistantReply {
+        Telemetry.track(if (voice) "assistant_voice_message" else "assistant_message")
+
         val contents = buildContents(history, message, attachments)
         val system = systemPrompt(voice)
 
@@ -183,9 +186,24 @@ class ScrittoAssistant(
         appendLine("- Make only the changes the user asked for. If the request is unclear (which text, which page, what new text), ask one short question instead of guessing.")
         appendLine("- An edited PDF is a new file in Files and the original is unchanged. Tell the user the new file name.")
         appendLine()
+        appendLine("FILE QUESTIONS (summaries, key points, answers from a document)")
+        appendLine("- A file attached to this message is already inside <file_content> below: use it directly and do NOT call read_file for it. For an older or imported file, call read_file once (use get_pdf_text only when you are about to edit a PDF).")
+        appendLine("- Base every statement on the file's text. Never invent details, names, dates or numbers. If something asked for is not in the file, say so plainly.")
+        appendLine("- If the file says it was cut off ('truncated' or 'Only the first N pages'), say which part you covered.")
+        appendLine("- If the file could not be read, say exactly why in one sentence and what to try (the error text tells you); never answer from guesswork.")
+        appendLine("- SUMMARY: start with one sentence on what the document is, then 3-6 bullets of the main points with the concrete facts (who, what, when, how much), then any deadline or action the reader needs. Skip filler.")
+        appendLine("- KEY POINTS / ACTION ITEMS / DATES: give exactly what was asked, as a tight bulleted list in the document's order, each item one line with its specifics. If the user wants it saved, create a note.")
+        appendLine("- A specific question: answer it first in one or two sentences, then add supporting detail only if it helps.")
+        appendLine()
+        appendLine("PDF EDIT REPLIES")
+        appendLine("- After edit_pdf, say what changed in plain words (e.g. 'Replaced \"2023\" with \"2024\" on page 2 and highlighted 3 lines on page 4') and the new file name.")
+        appendLine("- If the result lists skipped edits, name each one that could not be applied and why (usually the text wasn't found on that page) and ask for the exact wording. Never claim an edit that was skipped.")
+        appendLine("- Edits cover the page text only; scanned pages cannot be edited, and replacing text covers the old text with new text rather than rewriting the PDF. Say so if that is why something failed.")
+        appendLine()
 
         if (voice) {
-            appendLine("VOICE MODE: your reply is spoken aloud. Keep it to one or two short, natural sentences. No lists, no markdown, no emoji.")
+            appendLine("VOICE MODE: your reply is spoken aloud. No markdown, no emoji, no bullets or symbols. Keep ordinary replies to one or two short, natural sentences.")
+            appendLine("For a summary or key points of a file, speak the three or four most important points in short sentences (under about 60 words), and say the full detail is in the text chat.")
         } else {
             appendLine("STYLE: short, warm and direct. Light markdown only (**bold**, '- ' bullets). Don't repeat everything the tools already showed as action chips; just confirm and add anything useful.")
         }
