@@ -82,6 +82,7 @@ import com.internship.scritto.ui.theme.ScrittoOrange
 import com.internship.scritto.ui.theme.ScrittoSurface
 import com.internship.scritto.ui.theme.ScrittoTextMuted
 import com.internship.scritto.ui.theme.ScrittoTextSecondary
+import com.internship.scritto.telemetry.Telemetry
 
 private enum class AssistantPhase { IDLE, LISTENING, THINKING, SPEAKING }
 
@@ -163,6 +164,7 @@ fun VoiceAssistantOverlay(
         problem = null
         transcript = ""
         listening = true
+        Telemetry.track("voice_started")
 
         // Let the chime finish first so the microphone doesn't hear it.
         scope.launch {

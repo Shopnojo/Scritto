@@ -6,6 +6,7 @@ plugins {
 // Secrets come from the git-ignored ".env" file at the project root (see ".env.example"),
 // or from real environment variables of the same name (handy in CI); those win.
 //   GEMINI_API_KEYS                                        -> BuildConfig.GEMINI_API_KEYS
+//   SCRITTO_API_URL                                        -> BuildConfig.SCRITTO_API_URL
 //   RELEASE_STORE_FILE / _STORE_PASSWORD / _KEY_ALIAS / _KEY_PASSWORD -> release signing
 // Nothing here is required: without them the app still builds (AI simply shows "no API key").
 val dotEnv: Map<String, String> = providers
@@ -29,6 +30,10 @@ fun secret(name: String): String =
 
 val geminiApiKeys: String = secret("GEMINI_API_KEYS").trim()
 
+// Base URL of the Scritto backend that receives opt-in anonymous usage statistics.
+// Blank means "no backend": the app then never sends anything.
+val scrittoApiUrl: String = secret("SCRITTO_API_URL").trim().trimEnd('/')
+
 android {
     namespace = "com.internship.scritto"
 
@@ -46,6 +51,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GEMINI_API_KEYS", "\"$geminiApiKeys\"")
+        buildConfigField("String", "SCRITTO_API_URL", "\"$scrittoApiUrl\"")
     }
 
     signingConfigs {

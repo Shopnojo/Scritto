@@ -2,6 +2,7 @@ package com.internship.scritto.ai
 
 import org.json.JSONArray
 import org.json.JSONObject
+import com.internship.scritto.telemetry.Telemetry
 
 data class ChatTurn(val text: String, val fromUser: Boolean)
 
@@ -34,6 +35,8 @@ class ScrittoAssistant(
         attachments: List<Attachment> = emptyList(),
         voice: Boolean = false
     ): AssistantReply {
+        Telemetry.track(if (voice) "assistant_voice_message" else "assistant_message")
+
         val contents = buildContents(history, message, attachments)
         val system = systemPrompt(voice)
 

@@ -12,6 +12,7 @@ import com.internship.scritto.notifications.TaskReminderScheduler
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import com.internship.scritto.telemetry.Telemetry
 
 object ScrittoStore {
 
@@ -93,6 +94,7 @@ object ScrittoStore {
 
         _notes.add(0, note)
         persist()
+        Telemetry.track("note_created")
 
         return note
     }
@@ -189,6 +191,7 @@ object ScrittoStore {
         _tasks.add(task)
         persistTasks()
         TaskReminderScheduler.schedule(context.applicationContext, task)
+        Telemetry.track("task_created")
 
         return task
     }
@@ -248,6 +251,7 @@ object ScrittoStore {
 
         if (completed) {
             TaskReminderScheduler.cancel(context.applicationContext, id)
+            Telemetry.track("task_completed")
         } else {
             TaskReminderScheduler.schedule(context.applicationContext, task)
         }
@@ -362,6 +366,7 @@ object ScrittoStore {
         _events.add(event)
         persistEvents()
         EventReminderScheduler.schedule(context.applicationContext, event)
+        Telemetry.track(if (type == ScheduleEvent.Type.CLASS) "class_created" else "event_created")
         return event
     }
 
