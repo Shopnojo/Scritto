@@ -43,3 +43,8 @@ keystore.properties
 *.apk
 *.aab
 
+
+# Node/Vercel backend
+node_modules/
+.vercel/
+coverage/

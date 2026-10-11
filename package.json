@@ -1,0 +1,20 @@
+{
+  "name": "scritto-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vercel backend for Scritto: anonymous usage statistics ingest + admin API",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "dev": "vercel dev",
+    "dev:local": "node dev-local.js",
+    "hash-password": "node scripts/hash-password.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0"
+  }
+}
