@@ -34,6 +34,22 @@ test("health endpoint returns an OK response", async () => {
   assert.ok(Number.isFinite(Date.parse(body.timestamp)));
 });
 
+test("Supabase health endpoint reports missing configuration safely", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/health/supabase`);
+  if (response.status === 503) {
+    const body = await response.json() as {
+      status: string;
+      error: { code: string };
+    };
+    assert.equal(body.status, "unconfigured");
+    assert.equal(body.error.code, "SUPABASE_NOT_CONFIGURED");
+    assert.equal(JSON.stringify(body).includes("SUPABASE_PUBLISHABLE_KEY"), false);
+  } else {
+    // When environment variables are supplied, the route performs a live check.
+    assert.ok(response.status === 200 || response.status === 502);
+  }
+});
+
 test("unknown routes return a consistent 404 response", async () => {
   const response = await fetch(`${baseUrl}/api/v1/does-not-exist`);
   assert.equal(response.status, 404);
