@@ -11,7 +11,7 @@ export type AdminProfile = {
   display_name: string | null;
 };
 
-export const requireAuth: RequestHandler = async (_req, res, next) => {
+export const requireAuth: RequestHandler = async (req, res, next) => {
   const config = readSupabaseConfiguration();
   if (!config) {
     res.status(503).json({
@@ -23,7 +23,7 @@ export const requireAuth: RequestHandler = async (_req, res, next) => {
     return;
   }
 
-  const authorization = res.req.get("authorization");
+  const authorization = req.get("authorization");
   const match = authorization?.match(/^Bearer\s+([^\s]+)$/i);
   if (!match) {
     res.status(401).json({
