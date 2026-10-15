@@ -8,12 +8,11 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test src/app.test.ts"
   },
-  "engines": {
-    "node": ">=22"
-  },
+  "engines": { "node": ">=22" },
   "dependencies": {
+    "@supabase/supabase-js": "^2.76.1",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "helmet": "^8.1.0"
