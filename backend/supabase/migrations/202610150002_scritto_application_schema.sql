@@ -77,7 +77,19 @@ create table if not exists public.usage_events (
   properties jsonb not null default '{}'::jsonb
     check (jsonb_typeof(properties) = 'object'),
   constraint usage_events_properties_size
-    check (octet_length(properties::text) <= 4096)
+    check (octet_length(properties::text) <= 4096),
+  constraint usage_events_properties_allowlist
+    check (
+      properties - array['kind', 'voice']::text[] = '{}'::jsonb
+      and (
+        not (properties ? 'kind')
+        or jsonb_typeof(properties -> 'kind') = 'string'
+      )
+      and (
+        not (properties ? 'voice')
+        or jsonb_typeof(properties -> 'voice') = 'boolean'
+      )
+    )
 );
 
 create index if not exists usage_events_received_at_idx
@@ -183,4 +195,3 @@ grant all on table public.notification_deliveries to service_role;
 
 grant usage, select on all sequences in schema public to service_role;
 
--- Restrict client execution of future SECURITY DEFINER functions by default.
