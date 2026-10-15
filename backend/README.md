@@ -15,15 +15,25 @@ Node.js + TypeScript REST API for Scritto. The API is versioned under `/api/v1`.
 4. Start the development server with `npm run dev`.
 5. Open `http://localhost:3000/api/v1/health`.
 
-## Supabase database health check
+## Supabase migrations
 
-The `/api/v1/health/database` endpoint calls a minimal Postgres RPC function. Before using it, open the Supabase Dashboard's SQL Editor for the Scritto project and run the migration in:
+Apply migrations from `supabase/migrations/` in filename order using the Supabase SQL Editor or Supabase CLI.
 
-`supabase/migrations/202610150001_scritto_db_health.sql`
+- `202610150001_scritto_db_health.sql` creates a minimal database connectivity RPC.
+- `202610150002_scritto_application_schema.sql` creates the initial application tables and security policies.
 
-Then open `http://localhost:3000/api/v1/health/database`. A successful response confirms the backend can reach the Supabase Data API and execute the database function. It does not test application tables.
+After applying the health migration, `GET /api/v1/health/database` verifies the Data API can execute the database health RPC. This does not prove that the application schema has been applied.
 
-The migration function returns only a fixed status and exposes no application data. Do not use this pattern to expose application queries; application tables must have deliberate grants and Row Level Security policies.
+The application schema includes admin profiles, device installations, privacy-conscious usage events, remote configuration, admin notifications, and notification delivery records. The usage event properties are restricted to the allowlisted `kind` and `voice` fields. Do not add note/document content, filenames, or AI conversation text to telemetry.
+
+## Authentication routes
+
+- `GET /api/v1/auth/me` — validates a Supabase access token and returns the current user's identity.
+- `GET /api/v1/admin/me` — returns the administrator profile only if an active row exists in `admin_profiles`.
+
+Protected routes require `Authorization: Bearer <supabase_access_token>`. The API verifies the token with Supabase Auth. Admin access is checked against the database profile and active status; the API must not trust a client-supplied role or user ID.
+
+Google OAuth sign-in is initiated by the client through Supabase Auth. This API does not collect Google passwords. A profile row in `admin_profiles` must be provisioned deliberately; there is no public admin-registration route.
 
 ## Scripts
 
@@ -37,4 +47,5 @@ The migration function returns only a fixed status and exposes no application da
 - Never commit `.env` or real credentials.
 - Never expose Supabase secret/service-role keys to clients.
 - Protected routes must enforce authentication and authorization in the API.
-- Application tables must use explicit access grants and appropriate Row Level Security (RLS) policies.
+- Application tables use explicit grants and Row Level Security policies.
+- Do not store note content, document contents, filenames, or AI conversations in analytics.
