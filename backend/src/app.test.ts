@@ -50,6 +50,32 @@ test("Supabase health endpoint reports missing configuration safely", async () =
   }
 });
 
+test("current-user route never accepts a missing bearer token", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/auth/me`);
+  assert.ok(response.status === 401 || response.status === 503);
+
+  const body = await response.json() as {
+    error: { code: string };
+  };
+  assert.ok(
+    body.error.code === "AUTH_REQUIRED" ||
+    body.error.code === "AUTH_NOT_CONFIGURED"
+  );
+});
+
+test("admin identity route never accepts an unauthenticated request", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/admin/me`);
+  assert.ok(response.status === 401 || response.status === 503);
+
+  const body = await response.json() as {
+    error: { code: string };
+  };
+  assert.ok(
+    body.error.code === "AUTH_REQUIRED" ||
+    body.error.code === "AUTH_NOT_CONFIGURED"
+  );
+});
+
 test("unknown routes return a consistent 404 response", async () => {
   const response = await fetch(`${baseUrl}/api/v1/does-not-exist`);
   assert.equal(response.status, 404);
