@@ -32,6 +32,7 @@ import com.internship.scritto.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import com.internship.scritto.telemetry.Telemetry
 
 @Composable
 fun DocumentEditorScreen(
@@ -56,6 +57,10 @@ fun DocumentEditorScreen(
     var status by remember { mutableStateOf<String?>(null) }
 
     val saver = rememberDocumentSaver(descriptor.uri.toUri()) { status = it }
+
+    LaunchedEffect(descriptor.uri, convertMode) {
+        Telemetry.track(if (convertMode) "document_convert_opened" else "document_editor_opened")
+    }
 
     LaunchedEffect(descriptor.uri, descriptor.kind, convertMode) {
         if (descriptor.kind != DocumentKind.IMAGE && !convertMode) {

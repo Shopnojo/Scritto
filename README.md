@@ -12,6 +12,7 @@ Native Android · Kotlin · Jetpack Compose · package `com.internship.scritto`
    | Variable | Needed for |
    |---|---|
    | `GEMINI_API_KEYS` | Scritto AI. Comma-separated; requests rotate across the keys. Without it the app still runs and the assistant says it has no key. |
+   | `SCRITTO_API_URL` | Backend for the anonymous usage statistics (`https://` only; receives `POST /v1/devices` and `POST /v1/events`). Blank means the app never sends anything. See `PRIVACY_POLICY.md` and `docs/PLAY_DATA_SAFETY.md`. |
    | `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` | Signing a release APK only. |
 
    Real environment variables with the same names override `.env` (useful in CI).
