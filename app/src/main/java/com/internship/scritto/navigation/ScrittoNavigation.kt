@@ -682,10 +682,23 @@ fun ScrittoNavigation() {
 
         }
 
-        if (splashVisible || authGate is AuthGateState.Checking) {
+        if (splashVisible) {
             ScrittoSplashScreen(
                 onFinished = { splashVisible = false }
             )
+        }
+
+        if (!splashVisible && authGate is AuthGateState.Checking) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(com.internship.scritto.ui.theme.ScrittoBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = com.internship.scritto.ui.theme.ScrittoAmber
+                )
+            }
         }
 
         if (!splashVisible && authGate !is AuthGateState.Checking) {
