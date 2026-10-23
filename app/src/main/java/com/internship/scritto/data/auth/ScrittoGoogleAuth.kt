@@ -2,6 +2,7 @@ package com.internship.scritto.data.auth
 
 import android.content.Context
 import android.util.Base64
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -103,8 +104,12 @@ object ScrittoGoogleAuth {
         return status is SessionStatus.Authenticated
     }
 
-    suspend fun signOut() {
+    suspend fun signOut(context: Context) {
         supabase.auth.signOut()
+        // Clear provider-side state so Change account can offer another Google account.
+        runCatching {
+            CredentialManager.create(context).clearCredentialState(ClearCredentialStateRequest())
+        }
     }
 
     private fun createNonce(): String {
