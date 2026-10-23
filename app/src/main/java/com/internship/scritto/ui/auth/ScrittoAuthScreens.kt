@@ -61,7 +61,8 @@ import com.internship.scritto.ui.theme.ScrittoTheme
 fun ScrittoLoginScreen(
     onContinueWithGoogle: () -> Unit,
     modifier: Modifier = Modifier,
-    showPreviewLabel: Boolean = false
+    showPreviewLabel: Boolean = false,
+    isLoading: Boolean = false
 ) {
     Box(
         modifier = modifier
@@ -108,6 +109,7 @@ fun ScrittoLoginScreen(
                     .fillMaxWidth()
                     .height(58.dp),
                 shape = RoundedCornerShape(18.dp),
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ScrittoCreamBright,
                     contentColor = Color(0xFF171613)
@@ -117,10 +119,18 @@ fun ScrittoLoginScreen(
                     pressedElevation = 1.dp
                 )
             ) {
-                GoogleGlyph()
+                if (isLoading) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFF171613)
+                    )
+                } else {
+                    GoogleGlyph()
+                }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = "Continue with Google",
+                    text = if (isLoading) "Connecting to Google…" else "Continue with Google",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
