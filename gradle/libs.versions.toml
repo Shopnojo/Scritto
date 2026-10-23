@@ -6,9 +6,8 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
-kotlin = "2.2.10"
+kotlin = "2.2.21"
 composeBom = "2026.02.01"
-kotlinSerialization = "2.2.10"
 supabase = "3.5.0"
 ktor = "3.3.0"
 credentials = "1.6.0"
@@ -39,5 +38,5 @@ ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinSerialization" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
