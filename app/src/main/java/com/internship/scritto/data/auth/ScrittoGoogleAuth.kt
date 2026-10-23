@@ -10,6 +10,7 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.internship.scritto.BuildConfig
 import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.IDToken
@@ -81,8 +82,14 @@ object ScrittoGoogleAuth {
 
         val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
 
+        val idToken = requireNotNull(googleCredential.idToken) {
+            "Google did not return an ID token."
+        }
+        val email = googleCredential.id.takeIf { it.isNotBlank() }
+            ?: error("Google did not return an email address.")
+
         supabase.auth.signInWith(IDToken) {
-            idToken = googleCredential.idToken
+            idToken = idToken
             provider = Google
             nonce = rawNonce
         }
@@ -90,9 +97,9 @@ object ScrittoGoogleAuth {
         return GoogleAccount(
             displayName = googleCredential.displayName
                 ?.takeIf { it.isNotBlank() }
-                ?: googleCredential.givenName
-                ?: googleCredential.email,
-            email = googleCredential.email,
+                ?: googleCredential.givenName?.takeIf { it.isNotBlank() }
+                ?: email,
+            email = email,
             photoUrl = googleCredential.profilePictureUri?.toString()
         )
     }
