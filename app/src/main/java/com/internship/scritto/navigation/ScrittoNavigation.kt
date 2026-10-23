@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -59,6 +60,8 @@ import androidx.core.view.WindowInsetsCompat
 import com.internship.scritto.ai.AssistantSession
 import com.internship.scritto.components.ScrittoDock
 import com.internship.scritto.components.ScrittoMesh
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import com.internship.scritto.data.auth.ScrittoGoogleAuth
 import com.internship.scritto.data.repository.ScrittoStore
 import com.internship.scritto.notifications.NotificationRouter
 import com.internship.scritto.notifications.NotificationTarget
@@ -71,7 +74,10 @@ import com.internship.scritto.screens.ScheduleScreen
 import com.internship.scritto.screens.TaskScreen
 import com.internship.scritto.screens.DocumentPreviewScreen
 import com.internship.scritto.screens.DocumentEditorScreen
+import com.internship.scritto.ui.auth.ScrittoAccountConfirmationScreen
+import com.internship.scritto.ui.auth.ScrittoLoginScreen
 import com.internship.scritto.ui.splash.ScrittoSplashScreen
+import kotlinx.coroutines.launch
 
 private const val HOME_ROUTE = "home"
 private const val NOTES_ROUTE = "notes"
@@ -84,6 +90,15 @@ private const val DOCUMENT_ROUTE = "document/{name}/{uri}"
 private const val DOCUMENT_EDITOR_ROUTE = "document-editor/{name}/{uri}/{convertMode}"
 
 private fun scheduleRoute(openComposer: Boolean = false) = "schedule/$openComposer"
+
+private sealed interface AuthGateState {
+    data object Checking : AuthGateState
+    data object SignedOut : AuthGateState
+    data object SigningIn : AuthGateState
+    data class Confirming(val account: ScrittoGoogleAuth.GoogleAccount) : AuthGateState
+    data object Authenticated : AuthGateState
+    data class Failed(val message: String) : AuthGateState
+}
 
 private data class CreateAction(
     val label: String,
@@ -101,6 +116,22 @@ private val createActions = listOf(
 @Composable
 fun ScrittoNavigation() {
     val navController = rememberNavController()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var authGate by remember { mutableStateOf<AuthGateState>(AuthGateState.Checking) }
+
+    LaunchedEffect(Unit) {
+        authGate = try {
+            if (ScrittoGoogleAuth.hasExistingSession()) {
+                AuthGateState.Authenticated
+            } else {
+                AuthGateState.SignedOut
+            }
+        } catch (error: Exception) {
+            AuthGateState.Failed(error.message ?: "Couldn't check your sign-in session.")
+        }
+    }
+
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
@@ -651,10 +682,82 @@ fun ScrittoNavigation() {
 
         }
 
-        if (splashVisible) {
+        if (splashVisible || authGate is AuthGateState.Checking) {
             ScrittoSplashScreen(
                 onFinished = { splashVisible = false }
             )
+        }
+
+        if (!splashVisible && authGate !is AuthGateState.Checking) {
+            when (val gate = authGate) {
+                AuthGateState.Checking,
+                AuthGateState.Authenticated -> Unit
+
+                AuthGateState.SignedOut,
+                AuthGateState.SigningIn,
+                is AuthGateState.Failed -> {
+                    ScrittoLoginScreen(
+                        isLoading = gate is AuthGateState.SigningIn,
+                        onContinueWithGoogle = {
+                            if (authGate != AuthGateState.SigningIn) {
+                                authGate = AuthGateState.SigningIn
+                                coroutineScope.launch {
+                                    try {
+                                        val account = ScrittoGoogleAuth.signIn(context)
+                                        authGate = AuthGateState.Confirming(account)
+                                    } catch (_: GetCredentialCancellationException) {
+                                        authGate = AuthGateState.SignedOut
+                                    } catch (error: Exception) {
+                                        authGate = AuthGateState.Failed(
+                                            error.message ?: "Google sign-in couldn't be completed. Please try again."
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    )
+
+                    if (gate is AuthGateState.Failed) {
+                        androidx.compose.material3.Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 20.dp, vertical = 24.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = gate.message,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                is AuthGateState.Confirming -> {
+                    ScrittoAccountConfirmationScreen(
+                        displayName = gate.account.displayName,
+                        email = gate.account.email,
+                        photoUrl = gate.account.photoUrl,
+                        onContinueWithAccount = {
+                            authGate = AuthGateState.Authenticated
+                        },
+                        onChangeAccount = {
+                            coroutineScope.launch {
+                                try {
+                                    ScrittoGoogleAuth.signOut()
+                                    authGate = AuthGateState.SignedOut
+                                } catch (error: Exception) {
+                                    authGate = AuthGateState.Failed(
+                                        error.message ?: "Couldn't change the Google account."
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
+            }
         }
     }
 }
