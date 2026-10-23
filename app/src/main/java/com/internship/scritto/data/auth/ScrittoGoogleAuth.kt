@@ -82,14 +82,14 @@ object ScrittoGoogleAuth {
 
         val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
 
-        val idToken = requireNotNull(googleCredential.idToken) {
+        val googleIdToken = requireNotNull(googleCredential.idToken) {
             "Google did not return an ID token."
         }
         val email = googleCredential.id.takeIf { it.isNotBlank() }
             ?: error("Google did not return an email address.")
 
         supabase.auth.signInWith(IDToken) {
-            idToken = idToken
+            idToken = googleIdToken
             provider = Google
             nonce = rawNonce
         }
