@@ -746,7 +746,7 @@ fun ScrittoNavigation() {
                         onChangeAccount = {
                             coroutineScope.launch {
                                 try {
-                                    ScrittoGoogleAuth.signOut()
+                                    ScrittoGoogleAuth.signOut(context)
                                     authGate = AuthGateState.SignedOut
                                 } catch (error: Exception) {
                                     authGate = AuthGateState.Failed(
