@@ -2,6 +2,7 @@ package com.internship.scritto.data.auth
 
 import android.content.Context
 import android.util.Base64
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -26,6 +27,8 @@ import kotlinx.coroutines.flow.first
  * read from BuildConfig. No server-side secret belongs in this Android app.
  */
 object ScrittoGoogleAuth {
+    private const val TAG = "ScrittoAuth"
+
     val isConfigured: Boolean
         get() = BuildConfig.SUPABASE_URL.isNotBlank() &&
             BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()
@@ -71,16 +74,37 @@ object ScrittoGoogleAuth {
             .build()
 
         val credentialManager = CredentialManager.create(context)
-        val response = credentialManager.getCredential(context, request)
-        val credential = response.credential
+        Log.i(TAG, "Stage 1: requesting Google credential from Credential Manager")
+        val response = try {
+            credentialManager.getCredential(context, request)
+        } catch (error: Exception) {
+            Log.e(
+                TAG,
+                "Stage 1 failed: Credential Manager threw ${error.javaClass.simpleName}: ${error.message}",
+                error
+            )
+            throw error
+        }
+        Log.i(TAG, "Stage 1 succeeded: Credential Manager returned a credential")
 
+        val credential = response.credential
         if (credential !is CustomCredential ||
             credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) {
+            Log.e(TAG, "Stage 2 failed: returned credential was not a Google ID-token credential")
             error("Google did not return a supported ID-token credential.")
         }
 
-        val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+        val googleCredential = try {
+            GoogleIdTokenCredential.createFrom(credential.data)
+        } catch (error: Exception) {
+            Log.e(
+                TAG,
+                "Stage 2 failed: could not parse Google ID-token credential (${error.javaClass.simpleName}): ${error.message}",
+                error
+            )
+            throw error
+        }
 
         val googleIdToken = requireNotNull(googleCredential.idToken) {
             "Google did not return an ID token."
@@ -88,11 +112,22 @@ object ScrittoGoogleAuth {
         val email = googleCredential.id.takeIf { it.isNotBlank() }
             ?: error("Google did not return an email address.")
 
-        supabase.auth.signInWith(IDToken) {
-            idToken = googleIdToken
-            provider = Google
-            nonce = rawNonce
+        Log.i(TAG, "Stage 3: Google credential parsed; starting Supabase ID-token sign-in")
+        try {
+            supabase.auth.signInWith(IDToken) {
+                idToken = googleIdToken
+                provider = Google
+                nonce = rawNonce
+            }
+        } catch (error: Exception) {
+            Log.e(
+                TAG,
+                "Stage 3 failed: Supabase ID-token sign-in threw ${error.javaClass.simpleName}: ${error.message}",
+                error
+            )
+            throw error
         }
+        Log.i(TAG, "Stage 3 succeeded: Supabase ID-token sign-in completed")
 
         return GoogleAccount(
             displayName = googleCredential.displayName
