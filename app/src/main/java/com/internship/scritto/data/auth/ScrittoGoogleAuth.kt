@@ -11,8 +11,8 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.internship.scritto.BuildConfig
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.status.SessionStatus
-import io.github.jan.supabase.auth.providers.IDToken
-import io.github.jan.supabase.auth.providers.builtin.Google
+import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.createSupabaseClient
 import java.security.MessageDigest
 import java.security.SecureRandom
