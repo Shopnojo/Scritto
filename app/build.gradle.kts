@@ -28,6 +28,9 @@ fun secret(name: String): String =
         ?: dotEnv[name].orEmpty()
 
 val geminiApiKeys: String = secret("GEMINI_API_KEYS").trim()
+val supabaseUrl: String = secret("SUPABASE_URL").trim()
+val supabasePublishableKey: String = secret("SUPABASE_PUBLISHABLE_KEY").trim()
+val googleWebClientId: String = secret("GOOGLE_WEB_CLIENT_ID").trim()
 
 android {
     namespace = "com.internship.scritto"
@@ -46,6 +49,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GEMINI_API_KEYS", "\"$geminiApiKeys\"")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabasePublishableKey\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     signingConfigs {
