@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -58,7 +60,8 @@ import com.internship.scritto.ui.theme.ScrittoTheme
 @Composable
 fun ScrittoLoginScreen(
     onContinueWithGoogle: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showPreviewLabel: Boolean = false
 ) {
     Box(
         modifier = modifier
@@ -131,13 +134,15 @@ fun ScrittoLoginScreen(
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(30.dp))
-            Text(
-                text = "GOOGLE SIGN-IN · PREVIEW ONLY",
-                color = ScrittoTextMuted.copy(alpha = 0.75f),
-                style = MaterialTheme.typography.labelSmall,
-                letterSpacing = 1.4.sp
-            )
-            Spacer(Modifier.height(20.dp))
+            if (showPreviewLabel) {
+                Text(
+                    text = "GOOGLE SIGN-IN · PREVIEW ONLY",
+                    color = ScrittoTextMuted.copy(alpha = 0.75f),
+                    style = MaterialTheme.typography.labelSmall,
+                    letterSpacing = 1.4.sp
+                )
+                Spacer(Modifier.height(20.dp))
+            }
         }
     }
 }
@@ -152,7 +157,9 @@ fun ScrittoAccountConfirmationScreen(
     email: String,
     onContinueWithAccount: () -> Unit,
     onChangeAccount: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    photoUrl: String? = null,
+    showPreviewLabel: Boolean = false
 ) {
     Box(
         modifier = modifier
@@ -214,12 +221,21 @@ fun ScrittoAccountConfirmationScreen(
                             .background(ScrittoSurfaceElevated),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = displayName.trim().firstOrNull()?.uppercase() ?: "?",
-                            color = ScrittoCreamBright,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        if (!photoUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = photoUrl,
+                                contentDescription = "Google profile picture",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                text = displayName.trim().firstOrNull()?.uppercase() ?: "?",
+                                color = ScrittoCreamBright,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                     Spacer(Modifier.height(18.dp))
                     Text(
@@ -236,18 +252,20 @@ fun ScrittoAccountConfirmationScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(18.dp))
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = ScrittoSurfaceElevated
-                    ) {
-                        Text(
-                            text = "SAMPLE ACCOUNT · PREVIEW ONLY",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            color = ScrittoTextMuted,
-                            style = MaterialTheme.typography.labelSmall,
-                            letterSpacing = 0.8.sp
-                        )
+                    if (showPreviewLabel) {
+                        Spacer(Modifier.height(18.dp))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = ScrittoSurfaceElevated
+                        ) {
+                            Text(
+                                text = "SAMPLE ACCOUNT · PREVIEW ONLY",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                color = ScrittoTextMuted,
+                                style = MaterialTheme.typography.labelSmall,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
                     }
                 }
             }
@@ -443,6 +461,7 @@ fun ScrittoAuthDesignPreview() {
             ScrittoAccountConfirmationScreen(
                 displayName = "Alex Morgan",
                 email = "alex.morgan@example.com",
+                showPreviewLabel = true,
                 onContinueWithAccount = {
                     notice = "Preview only — authentication is not connected."
                 },
@@ -453,6 +472,7 @@ fun ScrittoAuthDesignPreview() {
             )
         } else {
             ScrittoLoginScreen(
+                showPreviewLabel = true,
                 onContinueWithGoogle = {
                     // Preview navigation only; this does not launch Google OAuth.
                     showConfirmation = true
