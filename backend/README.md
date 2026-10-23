@@ -10,7 +10,7 @@ Node.js + TypeScript REST API for Scritto. The API is versioned under `/api/v1`.
 ## Local development
 
 1. Copy `.env.example` to `.env`.
-2. Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in `.env`. Never commit this file.
+2. Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the server-only `SUPABASE_SECRET_KEY` in `.env`. Never commit this file or expose the secret key in the Android app.
 3. Install dependencies with `npm install`.
 4. Start the development server with `npm run dev`.
 5. Open `http://localhost:3000/api/v1/health`.
@@ -30,6 +30,9 @@ The application schema includes admin profiles, device installations, privacy-co
 
 - `GET /api/v1/auth/me` — validates a Supabase access token and returns the current user's identity.
 - `GET /api/v1/admin/me` — returns the administrator profile only if an active row exists in `admin_profiles`.
+- `POST /api/v1/devices/register` — registers or updates the authenticated user's installation. The server derives `user_id` from the verified access token and rejects installation IDs owned by another account. The request may include `installation_id` (UUID), `platform`, `manufacturer`, `model`, `os_version`, `sdk_int`, `app_version`, `app_build`, `locale`, and `push_token`. If no installation ID is supplied, the server generates one; clients should persist the returned ID for later registrations.
+
+Device registration requires `SUPABASE_SECRET_KEY` configured only on the backend. The endpoint returns `503 DEVICE_REGISTRATION_NOT_CONFIGURED` when that key is missing.
 
 Protected routes require `Authorization: Bearer <supabase_access_token>`. The API verifies the token with Supabase Auth. Admin access is checked against the database profile and active status; the API must not trust a client-supplied role or user ID.
 
