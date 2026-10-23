@@ -86,3 +86,15 @@ test("unknown routes return a consistent 404 response", async () => {
 
   assert.equal(body.error.code, "NOT_FOUND");
 });
+
+test("device registration rejects requests without a bearer token", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/devices/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ platform: "android" })
+  });
+  assert.ok(response.status === 401 || response.status === 503);
+
+  const body = await response.json() as { error: { code: string } };
+  assert.ok(body.error.code === "AUTH_REQUIRED" || body.error.code === "AUTH_NOT_CONFIGURED");
+});
