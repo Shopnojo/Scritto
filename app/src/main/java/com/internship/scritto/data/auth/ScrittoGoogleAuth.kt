@@ -24,6 +24,10 @@ import kotlinx.coroutines.flow.first
  * read from BuildConfig. No server-side secret belongs in this Android app.
  */
 object ScrittoGoogleAuth {
+    val isConfigured: Boolean
+        get() = BuildConfig.SUPABASE_URL.isNotBlank() &&
+            BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()
+
     private val supabase by lazy {
         require(BuildConfig.SUPABASE_URL.isNotBlank()) {
             "Missing SUPABASE_URL. Add it to the root .env file."
@@ -94,6 +98,7 @@ object ScrittoGoogleAuth {
 
     /** Waits for Supabase to restore persisted auth state before the UI chooses a start screen. */
     suspend fun hasExistingSession(): Boolean {
+        if (!isConfigured) return false
         val status = supabase.auth.sessionStatus.first { it !is SessionStatus.Initializing }
         return status is SessionStatus.Authenticated
     }
