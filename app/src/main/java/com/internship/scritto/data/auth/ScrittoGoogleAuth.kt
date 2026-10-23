@@ -9,11 +9,13 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.internship.scritto.BuildConfig
 import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.providers.IDToken
 import io.github.jan.supabase.auth.providers.builtin.Google
 import io.github.jan.supabase.createSupabaseClient
 import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlinx.coroutines.flow.first
 
 /**
  * Native Google sign-in backed by Supabase Auth.
@@ -88,6 +90,12 @@ object ScrittoGoogleAuth {
             email = googleCredential.email,
             photoUrl = googleCredential.profilePictureUri?.toString()
         )
+    }
+
+    /** Waits for Supabase to restore persisted auth state before the UI chooses a start screen. */
+    suspend fun hasExistingSession(): Boolean {
+        val status = supabase.auth.sessionStatus.first { it !is SessionStatus.Initializing }
+        return status is SessionStatus.Authenticated
     }
 
     suspend fun signOut() {
