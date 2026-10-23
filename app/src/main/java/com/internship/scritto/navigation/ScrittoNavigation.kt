@@ -2,6 +2,7 @@ package com.internship.scritto.navigation
 
 import android.app.Activity
 import android.net.Uri
+import android.util.Log
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
@@ -722,8 +723,14 @@ fun ScrittoNavigation() {
                                     } catch (_: GetCredentialCancellationException) {
                                         authGate = AuthGateState.SignedOut
                                     } catch (error: Exception) {
+                                        Log.e(
+                                            "ScrittoAuth",
+                                            "Google sign-in failed (${error.javaClass.simpleName}): ${error.message}",
+                                            error
+                                        )
                                         authGate = AuthGateState.Failed(
-                                            error.message ?: "Google sign-in couldn't be completed. Please try again."
+                                            "Sign-in failed (${error.javaClass.simpleName}): " +
+                                                (error.message ?: "No additional error details. Check Logcat for ScrittoAuth.")
                                         )
                                     }
                                 }
