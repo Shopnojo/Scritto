@@ -18,7 +18,11 @@ authRouter.get("/me", requireAuth, async (_req, res) => {
 
     // A signed-in Google account without an admin profile is authenticated but
     // not authorised. Returning the identity lets the frontend show that state.
-    const profile = result.error ? null : result.data;
+    const profile = (result.error ? null : result.data) as {
+      role: string | null;
+      display_name: string | null;
+      is_active: boolean | null;
+    } | null;
     res.status(200).json({
       id: user.id,
       email: user.email ?? "",
