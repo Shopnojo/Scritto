@@ -105,7 +105,7 @@ async function loadEvents(client: NonNullable<ReturnType<typeof getSupabaseAdmin
   if (to) query = query.lt("occurred_at", to);
   const result = await query;
   if (result.error) throw result.error;
-  return (result.data ?? []) as Array<{
+  return (result.data ?? []) as unknown as Array<{
     id: number; name: string; installation_id: string; occurred_at: string; received_at: string;
     app_version: string | null; properties: Record<string, unknown>;
     installations: { model: string | null } | null;
@@ -165,6 +165,7 @@ adminDataRouter.get("/devices/:id", async (req, res) => {
       res.status(404).json({ error: { code: "DEVICE_NOT_FOUND", message: "The requested installation was not found." } });
       return;
     }
+    const device = found.data;
     const eventResult = await client.from("usage_events")
       .select("id, name, installation_id, occurred_at, app_version, properties")
       .eq("installation_id", req.params.id)
@@ -172,15 +173,15 @@ adminDataRouter.get("/devices/:id", async (req, res) => {
     if (eventResult.error) throw eventResult.error;
     const events = (eventResult.data ?? []).map((event) => ({
       id: String(event.id), name: event.name, installation_id: event.installation_id,
-      device_model: found.data.model, app_version: event.app_version,
+      device_model: device.model, app_version: event.app_version,
       occurred_at: event.occurred_at, properties: event.properties
     }));
     res.json({
-      id: found.data.installation_id, platform: found.data.platform,
-      manufacturer: found.data.manufacturer, model: found.data.model,
-      os_version: found.data.os_version, app_version: found.data.app_version,
-      locale: found.data.locale, created_at: found.data.created_at,
-      last_seen_at: found.data.last_seen_at, event_count: events.length,
+      id: device.installation_id, platform: device.platform,
+      manufacturer: device.manufacturer, model: device.model,
+      os_version: device.os_version, app_version: device.app_version,
+      locale: device.locale, created_at: device.created_at,
+      last_seen_at: device.last_seen_at, event_count: events.length,
       recent_events: events, top_events: breakdown(events.map((event) => event.name))
     });
   } catch { sendUnavailable(res); }
