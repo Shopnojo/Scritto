@@ -32,7 +32,7 @@ authRouter.get("/me", requireAuth, async (_req, res) => {
       avatar_url: typeof metadata.avatar_url === "string" ? metadata.avatar_url :
         typeof metadata.picture === "string" ? metadata.picture : null,
       role: profile?.is_active ? profile.role : null,
-      is_admin: Boolean(profile?.is_active && ["owner", "admin", "analyst"].includes(profile.role))
+      is_admin: Boolean(profile?.is_active && typeof profile.role === "string" && ["owner", "admin", "analyst"].includes(profile.role))
     });
   } catch {
     res.status(503).json({
