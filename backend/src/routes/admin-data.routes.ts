@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { User } from "@supabase/supabase-js";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
@@ -398,7 +399,7 @@ notificationsRouter.post("/send", async (req, res) => {
       : await recipientsQuery.in("installation_id", deviceIds as string[]);
     if (recipients.error) throw recipients.error;
     const targetRows = recipients.data ?? [];
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     const inserted = await client.from("admin_notifications").insert({
       id, title, body: message,
       audience: audience === "all" ? { type: "all" } : { type: "devices", device_ids: deviceIds },
